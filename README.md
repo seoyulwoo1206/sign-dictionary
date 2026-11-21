@@ -22,7 +22,7 @@ python -m http.server 8770
 
 ## 아바타
 
-- `assets/avatar.vrm` 에 VRM 파일을 넣으면 3D 아바타로 보여 줍니다 (VRoid Studio에서 직접 만든 캐릭터 권장).
+- `assets/avatar.vrm` 의 VRM 아바타로 보여 줍니다. 지금 들어 있는 것은 pixiv의 샘플 모델 `VRM1_Constraint_Twist_Sample` (© 2022 pixiv Inc., [VRM 라이선스 1.0](https://vrm.dev/licenses/1.0/) — 재배포·수정 허용)입니다. VRoid Studio에서 만든 내 캐릭터로 바꿔 넣어도 됩니다.
 - 이 파일이 없으면 `_local-test/sample.vrm`(로컬 테스트 전용, 배포 안 함) → 그것도 없으면 마네킹으로 보여 줍니다.
 - 내 정보 → 사람 모습에서 아바타 / 마네킹을 바꿀 수 있습니다.
 
