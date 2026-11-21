@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>동작 데이터 제작 도구 — 수어 시뮬레이션 사전</title>
+  <link rel="stylesheet" href="css/recorder.css">
+</head>
+<body>
+  <header class="top">
+    <a class="back" href="index.html" aria-label="사전 앱으로 돌아가기">← 사전으로</a>
+    <h1>동작 데이터 제작 도구</h1>
+    <p class="sub">영상에서 관절 좌표만 뽑아 JSON으로 저장합니다. 영상 원본은 어디에도 저장하거나 전송하지 않습니다.</p>
+  </header>
+
+  <div id="globalStatus" class="status" role="status" aria-live="polite">준비됨</div>
+
+  <main class="layout">
+    <!-- 0. 녹화 대기열 -->
+    <section class="card queue-card" aria-labelledby="h-queue">
+      <h2 id="h-queue"><span class="step">0</span> 녹화 대기열</h2>
+      <p class="hint">동작이 아직 없거나 임시 동작인 단어·지문자를 하나씩 골라 녹화하세요. 앱에서는 녹화 전 단어를 지문자로 보여 줍니다.</p>
+      <div class="row wrap">
+        <button type="button" id="qConnect">📁 data 폴더 연결</button>
+        <span id="qFolder" class="hint">연결하면 저장 버튼 한 번으로 <code>signs/단어.json</code> 저장과 <code>words.json</code> 갱신을 함께 해요 (Chrome·Edge).</span>
+      </div>
+      <div class="row wrap">
+        <label>종류
+          <select id="qKind"><option value="word">단어</option><option value="jamo">지문자 자모</option></select>
+        </label>
+        <label>보기
+          <select id="qFilter">
+            <option value="todo">해야 할 것</option>
+            <option value="missing">녹화 필요</option>
+            <option value="placeholder">임시 동작</option>
+            <option value="recorded">녹화됨</option>
+            <option value="all">전체</option>
+          </select>
+        </label>
+        <span id="qCount" class="hint"></span>
+        <span style="flex:1"></span>
+        <button type="button" id="qNext">다음 항목 →</button>
+        <button type="button" id="qSave" class="primary">💾 폴더에 저장하고 다음으로</button>
+      </div>
+      <div id="qList" class="q-list" role="list" aria-label="녹화할 항목"></div>
+    </section>
+
+    <!-- 1. 촬영 / 추출 -->
+    <section class="card" aria-labelledby="h-capture">
+      <h2 id="h-capture"><span class="step">1</span> 촬영 · 추출</h2>
+
+      <div class="tabs" role="tablist" aria-label="입력 방식">
+        <button type="button" id="tabCam" class="tab active" role="tab" aria-selected="true">웹캠 녹화</button>
+        <button type="button" id="tabFile" class="tab" role="tab" aria-selected="false">영상 파일</button>
+      </div>
+
+      <div class="row wrap">
+        <label>추출 방식
+          <select id="engine">
+            <option value="auto">자동 (Holistic 우선)</option>
+            <option value="holistic">Holistic만</option>
+            <option value="separate">몸 + 손 + 얼굴 따로</option>
+          </select>
+        </label>
+        <label>저장 fps
+          <select id="fps">
+            <option value="30" selected>30</option>
+            <option value="24">24</option>
+            <option value="15">15</option>
+          </select>
+        </label>
+        <span id="engineInfo" class="hint"></span>
+      </div>
+
+      <div id="stage" class="stage">
+        <video id="video" playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <div id="countdown" class="countdown" hidden></div>
+        <div id="recBadge" class="rec-badge" hidden>● 녹화 중 <span id="recTime">0.0초</span></div>
+        <div id="stageEmpty" class="stage-empty">카메라를 켜거나 영상 파일을 고르세요</div>
+      </div>
+
+      <div id="camControls" class="row wrap">
+        <button type="button" id="btnCam">카메라 켜기</button>
+        <button type="button" id="btnRec" class="primary" disabled>녹화 시작</button>
+        <label class="check"><input type="checkbox" id="useCountdown" checked> 3초 뒤 시작</label>
+        <label class="check"><input type="checkbox" id="mirror" checked> 거울처럼 보기</label>
+      </div>
+      <div id="fileControls" class="row wrap" hidden>
+        <input type="file" id="fileInput" accept="video/*" aria-label="영상 파일 고르기">
+        <button type="button" id="btnExtract" class="primary" disabled>추출 시작</button>
+        <button type="button" id="btnCancel" hidden>취소</button>
+      </div>
+
+      <progress id="progress" value="0" max="1" hidden></progress>
+      <p class="hint">
+        상반신(머리부터 배까지)과 두 손이 화면에 다 들어오게 하고, 두 손을 배 앞에 내린 <b>중립 자세</b>에서 시작해 중립 자세로 끝내세요.
+        화면이 거울처럼 보여도 저장되는 좌우는 실제 좌우(파랑 = 내 왼손, 주황 = 내 오른손)입니다.
+        웹캠은 실시간으로 추출하므로 컴퓨터가 느리면 프레임이 듬성해질 수 있습니다 — 그럴 땐 영상을 찍어서 파일로 올리면 모든 프레임을 정확히 추출합니다.
+      </p>
+    </section>
+
+    <!-- 2. 다듬기 -->
+    <section class="card" aria-labelledby="h-edit">
+      <h2 id="h-edit"><span class="step">2</span> 미리보기 · 다듬기</h2>
+
+      <div class="previews">
+        <canvas id="front" class="pv-front" aria-label="정면 스켈레톤 미리보기"></canvas>
+        <canvas id="side" class="pv-side" aria-label="측면 스켈레톤 미리보기"></canvas>
+      </div>
+      <div class="legend">
+        <span><i class="dot left"></i>왼손</span>
+        <span><i class="dot right"></i>오른손</span>
+        <span><i class="dot body"></i>몸</span>
+        <span><i class="dot face"></i>얼굴</span>
+      </div>
+
+      <div class="row">
+        <button type="button" id="btnPlay" disabled aria-label="재생 / 일시정지">▶ 재생</button>
+        <input type="range" id="scrub" min="0" max="0" value="0" step="1" disabled aria-label="프레임 이동">
+        <span id="frameLabel" class="mono">0 / 0</span>
+      </div>
+
+      <fieldset id="editBox" disabled>
+        <legend>자르기</legend>
+        <div class="slider-row">
+          <label for="trimStart">시작</label>
+          <input type="range" id="trimStart" min="0" max="0" value="0" step="1">
+          <span id="trimStartLabel" class="mono">0</span>
+        </div>
+        <div class="slider-row">
+          <label for="trimEnd">끝</label>
+          <input type="range" id="trimEnd" min="0" max="0" value="0" step="1">
+          <span id="trimEndLabel" class="mono">0</span>
+        </div>
+        <div class="row wrap">
+          <button type="button" id="btnAutoTrim">중립 자세 자동 트리밍</button>
+          <button type="button" id="btnResetTrim">전체로 되돌리기</button>
+          <span id="trimInfo" class="hint"></span>
+        </div>
+
+        <div class="slider-row">
+          <label for="strength">스무딩</label>
+          <input type="range" id="strength" min="0" max="1" step="0.05" value="0.5">
+          <span id="strengthLabel" class="mono">0.50</span>
+        </div>
+        <div class="slider-row">
+          <label for="depth" title="몸(포즈) 관절의 앞뒤 깊이에 곱하는 배율. 측면에서 팔이 너무 앞으로 나와 보이면 줄이세요.">몸 깊이</label>
+          <input type="range" id="depth" min="0" max="1.5" step="0.05" value="1">
+          <span id="depthLabel" class="mono">1.00</span>
+        </div>
+        <div class="slider-row">
+          <label for="maxGap" title="손·얼굴 인식이 이 프레임 수 이하로 끊긴 구간은 앞뒤 프레임으로 채웁니다.">끊김 보간</label>
+          <input type="range" id="maxGap" min="0" max="20" step="1" value="8">
+          <span id="maxGapLabel" class="mono">8프레임</span>
+        </div>
+      </fieldset>
+      <p id="stats" class="hint"></p>
+    </section>
+
+    <!-- 3. 저장 -->
+    <section class="card" aria-labelledby="h-save">
+      <h2 id="h-save"><span class="step">3</span> 정보 입력 · 저장</h2>
+
+      <div class="tabs" role="tablist" aria-label="저장 종류">
+        <button type="button" id="modeWord" class="tab active" role="tab" aria-selected="true">단어</button>
+        <button type="button" id="modeJamo" class="tab" role="tab" aria-selected="false">지문자 모드</button>
+      </div>
+
+      <form id="wordForm" class="form" autocomplete="off">
+        <label>단어 <span class="req">필수</span>
+          <input type="text" id="fWord" placeholder="먹다">
+        </label>
+        <label>활용형 (쉼표로 구분)
+          <input type="text" id="fForms" placeholder="먹어, 먹어요, 먹었어요">
+        </label>
+        <label>같은 수어를 쓰는 말 (쉼표로 구분)
+          <input type="text" id="fSynonyms" placeholder="식사하다">
+        </label>
+        <div class="grid3">
+          <label>품사
+            <select id="fPos"></select>
+          </label>
+          <label>분류
+            <input type="text" id="fCategory" placeholder="음식">
+          </label>
+          <label>난이도
+            <select id="fLevel">
+              <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+            </select>
+          </label>
+        </div>
+        <label>뜻
+          <input type="text" id="fMeaning" placeholder="음식을 입으로 넣어 삼키다">
+        </label>
+        <label>동작 설명
+          <textarea id="fDescription" rows="2" placeholder="오른손 손끝을 모아 입 앞으로 두 번 가져간다."></textarea>
+        </label>
+        <label>손 모양
+          <input type="text" id="fHandshape" placeholder="손끝 모은 손">
+        </label>
+        <label>비수지 신호 (표정 · 고개 등)
+          <input type="text" id="fNonManual" placeholder="없으면 비워 둠">
+        </label>
+      </form>
+
+      <div id="jamoForm" hidden>
+        <p class="hint">녹화한 자모를 고르세요. 자모 하나를 파일 하나로 저장합니다.</p>
+        <div id="jamoList" class="jamo-list" role="radiogroup" aria-label="자모 선택"></div>
+      </div>
+
+      <p id="saveHint" class="save-hint"></p>
+      <div class="row wrap">
+        <button type="button" id="btnDownload" class="primary" disabled>JSON 내려받기</button>
+        <button type="button" id="btnCopy">words.json 항목 복사</button>
+        <span id="saveMsg" class="hint" role="status" aria-live="polite"></span>
+      </div>
+      <label id="entryWrap">words.json에 붙일 항목
+        <textarea id="entryText" rows="12" readonly spellcheck="false"></textarea>
+      </label>
+      <p class="hint">검수 전 데이터는 <code>verified: false</code>로 저장됩니다. 국립국어원 사전 영상 등 남의 영상에서 뽑은 데이터는 배포하지 말고, 직접 찍은 동작만 사용하세요.</p>
+    </section>
+  </main>
+
+  <script type="module" src="js/recorder/recorder.js"></script>
+  <noscript><p class="status error">이 도구는 자바스크립트가 필요합니다.</p></noscript>
+</body>
+</html>

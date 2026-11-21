@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>문장 분석 테스트</title>
+<style>
+  body { font-family: system-ui, "Malgun Gothic", sans-serif; margin: 24px; color: #222; background: #fafafa; }
+  h1 { font-size: 1.3rem; }
+  #summary { font-size: 1.1rem; font-weight: 700; padding: 10px 14px; border-radius: 8px; margin: 12px 0; background: #eee; }
+  #summary.ok { background: #dff5e1; color: #17642a; }
+  #summary.bad { background: #fde2e2; color: #9b1c1c; }
+  table { border-collapse: collapse; width: 100%; background: #fff; font-size: 0.9rem; }
+  th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; vertical-align: top; word-break: break-all; }
+  th { background: #f0f0f0; }
+  tr.fail td { background: #fff1f1; }
+  .pass { color: #17642a; font-weight: 700; }
+  .failmark { color: #9b1c1c; font-weight: 700; }
+  code { font-family: Consolas, monospace; font-size: 0.85rem; }
+  label { font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<h1>문장 → 수어 보조: 분석 로직 테스트</h1>
+<p>프로젝트 폴더에서 <code>python -m http.server</code>를 실행한 뒤 <code>/tests/tokenizer.test.html</code>로 열어 주세요.</p>
+<div id="summary">테스트 실행 중…</div>
+<label><input type="checkbox" id="onlyFail"> 실패한 항목만 보기</label>
+<table>
+  <thead><tr><th>번호</th><th>분류</th><th>항목</th><th>결과</th><th>기대값</th><th>실제값</th></tr></thead>
+  <tbody id="rows"></tbody>
+</table>
+<script type="module">
+  import { runTests, summarize } from './tokenizer.test.js';
+
+  const summaryEl = document.getElementById('summary');
+  const rowsEl = document.getElementById('rows');
+  const onlyFail = document.getElementById('onlyFail');
+
+  function cell(text, cls) {
+    const td = document.createElement('td');
+    td.textContent = text;
+    if (cls) td.className = cls;
+    return td;
+  }
+
+  function render(results) {
+    rowsEl.replaceChildren();
+    results.forEach((r, i) => {
+      if (onlyFail.checked && r.pass) return;
+      const tr = document.createElement('tr');
+      if (!r.pass) tr.className = 'fail';
+      tr.append(
+        cell(String(i + 1)), cell(r.group), cell(r.name),
+        cell(r.pass ? '통과' : '실패', r.pass ? 'pass' : 'failmark'),
+        cell(r.expected), cell(r.pass ? '' : r.actual),
+      );
+      rowsEl.append(tr);
+    });
+  }
+
+  try {
+    const res = await fetch('../data/words.json');
+    if (!res.ok) throw new Error('words.json을 불러오지 못했습니다 (' + res.status + ')');
+    const results = runTests(await res.json());
+    const sum = summarize(results);
+    const sentences = results.filter((r) => r.group === '문장').length;
+    const line = `전체 ${sum.total}개 중 ${sum.passed}개 통과, ${sum.failed}개 실패 (문장 예시 ${sentences}개 포함)`;
+    summaryEl.textContent = line;
+    summaryEl.className = sum.failed ? 'bad' : 'ok';
+    render(results);
+    onlyFail.addEventListener('change', () => render(results));
+    console.table(results.map((r) => ({ 분류: r.group, 항목: r.name, 결과: r.pass ? '통과' : '실패', 기대값: r.expected, 실제값: r.actual })));
+    console.log(line);
+  } catch (err) {
+    summaryEl.textContent = '테스트를 실행하지 못했습니다: ' + err.message;
+    summaryEl.className = 'bad';
+    console.error(err);
+  }
+</script>
+</body>
+</html>
