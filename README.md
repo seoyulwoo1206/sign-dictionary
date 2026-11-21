@@ -29,8 +29,12 @@ python -m http.server 8770
 ## 데이터
 
 - 사전의 모든 단어는 수어로 표현됩니다: 동작이 녹화된 단어는 그 동작을, 아직 없는 단어(`sign: null`)는 **지문자**로 보여 줍니다.
-- `signStatus`: `recorded`(직접 녹화) / `placeholder`(기능 시험용 임시 동작) / `missing`(녹화 필요).
-- 지금 `data/signs/*.json` 37개와 `data/fingerspelling/*.json` 40개는 **임시 동작**입니다 (`source: "generated-placeholder"`, `node tools/gen-fake-data.mjs` 로 다시 만듦).
+- `signStatus`: `recorded`(직접 녹화) / `described`(국립국어원 한국수어사전의 수형 설명을 보고 만든 동작) / `placeholder`(기능 시험용 임시 동작) / `missing`(동작 없음 → 지문자).
+- `data/signs/*.json`(지금 37개)과 `data/fingerspelling/*.json` 40개는 **사전 설명 기반 동작**입니다 (`source: "described-ksl-dictionary"`). 사전의 영상·사진에서 좌표를 뽑은 것이 아니라, 수형 설명을 읽고 새로 만든 동작이며 검수 전(`verified: false`)입니다.
+  - 다시 만들기: `node tools/gen-fake-data.mjs` (일부만: `node tools/gen-fake-data.mjs 먹다 ㄱ`). `words.json`의 `sign`·`signStatus`·`ref`·`description`도 함께 갱신합니다.
+  - 동작 정의: `tools/ksl/signs/*.mjs`(단어), `tools/ksl/jamo.mjs`(지문자). 쓰는 법은 **`tools/ksl/README.md`**.
+  - 어휘(손 모양·위치·방향·움직임): `tools/ksl/vocab.mjs`, 움직임 엔진: `tools/ksl/engine.mjs`.
+  - 사전 설명 원문: `data/ksl-ref.json` (`node tools/fetch-ksl-ref.mjs`로 모음. 출처: 국립국어원 한국수어사전, CC BY-NC-ND 2.0 KR — 설명 원문을 그대로 보관·표시하고 영상·사진은 저장하지 않음).
 - 녹화: `recorder.html` → 0. 녹화 대기열에서 단어·자모를 골라 녹화 → Chrome·Edge에서는 "data 폴더 연결" 후 저장 한 번으로 파일 저장과 `words.json` 갱신까지 됩니다. 지문자 40개를 먼저 녹화하면 모든 단어가 실제 지문자로 표현됩니다.
 - 좌표계: 양 어깨 중점 = 원점, 어깨 너비 = 1, x+ = 보는 사람 기준 오른쪽, y+ = 위, z+ = 카메라 쪽 (`js/viewer/landmarks.js`).
 

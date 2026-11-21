@@ -5,6 +5,16 @@ import { entryClip, hasOwnSign } from '../sentence/clips.js';
 import { createViewerBlock } from '../viewer/widget.js';
 import { addToStudy, removeFromStudy, isStudying } from '../learn/progress.js';
 
+// 국립국어원 한국수어사전 항목: 수형 설명 원문 + 영상 링크 (CC BY-NC-ND 2.0 KR, 원문 그대로 표시)
+function refCard(ref) {
+  return h('div.card.ref-card',
+    h('h2.small-title', '국립국어원 한국수어사전'),
+    ref.description ? h('p.small', h('b', '수형 설명 '), ref.description) : null,
+    h('p.small', h('a', { href: ref.url, target: '_blank', rel: 'noopener' }, '▶ 사전에서 실제 영상 보기 ↗')),
+    h('p.muted.tiny', '출처: 국립국어원 한국수어사전 (저작자표시-비영리-변경금지 2.0 대한민국). 3D 동작은 이 설명을 참고해 새로 만든 것이며 원본 영상이 아닙니다.'),
+  );
+}
+
 export async function render(root, ctx) {
   const { list, byWord } = await loadWords();
   const word = ctx.params.word;
@@ -65,12 +75,15 @@ export async function render(root, ctx) {
             h('h1.big-word', { style: { marginTop: '8px' } }, entry.word),
           ),
           h('div.card', info),
+          entry.ref ? refCard(entry.ref) : null,
           studyBtn,
           !hasOwnSign(entry)
             ? h('p.notice.small', h('b', '동작 녹화 필요'), ' — 이 단어의 수어 동작은 아직 녹화되지 않아서 지문자로 보여 주고 있어요. ', h('a', { href: 'recorder.html?word=' + encodeURIComponent(entry.word) }, '지금 녹화하기 →'))
             : entry.signStatus === 'placeholder'
               ? h('p.notice.small', h('b', '임시 동작'), ' — 기능 시험용으로 만든 가짜 동작이라 실제 한국수어와 달라요. ', h('a', { href: 'recorder.html?word=' + encodeURIComponent(entry.word) }, '진짜 동작 녹화하기 →'))
-              : !entry.verified ? h('p.notice.small', '검수 전 데이터예요. 학습 참고용으로만 써 주세요.') : null,
+              : entry.signStatus === 'described'
+                ? h('p.notice.small', h('b', '설명 기반 동작'), ' — 국립국어원 한국수어사전의 수형 설명을 보고 만든 동작이에요. 실제 영상과 다를 수 있으니 위 링크의 영상과 꼭 비교해 보세요.')
+                : !entry.verified ? h('p.notice.small', '검수 전 데이터예요. 학습 참고용으로만 써 주세요.') : null,
         ),
       ),
     ),

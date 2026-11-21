@@ -464,3 +464,8 @@ body.immersive { padding-bottom: 0; }
 .week div { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; height: 100%; font-size: .72rem; color: var(--muted); }
 .week i { display: block; width: 70%; max-width: 28px; background: var(--accent); border-radius: 6px 6px 2px 2px; min-height: 3px; }
 .week .today { color: var(--text); font-weight: 700; }
+
+/* 국립국어원 한국수어사전 참고 카드 */
+.tiny { font-size: .75rem; line-height: 1.5; }
+.small-title { font-size: .95rem; margin: 0 0 6px; }
+.ref-card p { margin: 6px 0; }

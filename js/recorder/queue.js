@@ -80,7 +80,8 @@ export function initQueue(api) {
           ? await readText(state.dir, `fingerspelling/${j}.json`)
           : await (await fetch(`data/fingerspelling/${encodeURIComponent(j)}.json`, { cache: 'no-store' })).text();
         const m = text.slice(0, 400).match(/"source"\s*:\s*"([^"]+)"/);
-        state.jamoStatus[j] = m && m[1] === 'generated-placeholder' ? 'placeholder' : 'recorded';
+        // 사전 설명을 보고 만든 동작(described-ksl-dictionary)도 아직 녹화본이 아니므로 대기열에 남긴다
+        state.jamoStatus[j] = m && (m[1] === 'generated-placeholder' || m[1] === 'described-ksl-dictionary') ? 'placeholder' : 'recorded';
       } catch {
         state.jamoStatus[j] = 'missing';
       }
@@ -89,10 +90,10 @@ export function initQueue(api) {
 
   function wordStatus(w) {
     if (!w.sign) return 'missing';
-    return w.signStatus === 'placeholder' ? 'placeholder' : 'recorded';
+    return w.signStatus === 'placeholder' || w.signStatus === 'described' ? 'placeholder' : 'recorded';
   }
 
-  const LABEL = { missing: '녹화 필요', placeholder: '임시 동작', recorded: '녹화됨' };
+  const LABEL = { missing: '녹화 필요', placeholder: '설명 기반·임시', recorded: '녹화됨' };
 
   function items() {
     const kind = el.kind.value;
