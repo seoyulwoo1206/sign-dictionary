@@ -1,5 +1,6 @@
 // 여러 동작을 이어 붙여 하나의 클립으로 만든다 (문장용)
 // 동작 사이는 앞 동작의 마지막 프레임 → 다음 동작의 첫 프레임을 부드럽게 보간한다.
+import * as THREE from 'three';
 import { lerpFrame, easeInOut } from './smoothing.js';
 
 export const SEQ_FPS = 30;
@@ -85,6 +86,69 @@ export function trimNeutral(frames, { keepStart = false, keepEnd = false } = {})
   return frames.slice(Math.max(0, s - 1), Math.min(frames.length, e + 2));
 }
 
+// ---------- 동작 사이 보간 ----------
+// 손의 점들을 그대로 직선 보간하면, 손 방향이 크게 다른 두 손모양 사이(예: 손끝이 아래인 지문자 → 위인 지문자)에서
+// 손이 납작하게 찌그러졌다가 뒤집힌다 (손 길이가 0에 가까워지는 순간 손 방향이 홱 돌아 손이 튄다).
+// 손은 "손목 위치 + 손 전체의 회전 + 손 안에서의 모양"으로 나눠, 회전은 구면 보간(slerp)하고 모양은 손 기준틀 안에서 보간한다.
+const _x = new THREE.Vector3(), _y = new THREE.Vector3(), _z = new THREE.Vector3(), _v = new THREE.Vector3();
+const _m = new THREE.Matrix4();
+const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _qi = new THREE.Quaternion();
+
+// 손 기준틀: 손목→중지 뿌리(x), 새끼→검지 쪽(y). 손이 찌그러져 있으면 null
+function handQuat(h, out) {
+  _x.set(h[9][0] - h[0][0], h[9][1] - h[0][1], h[9][2] - h[0][2]);
+  _y.set(h[5][0] - h[17][0], h[5][1] - h[17][1], h[5][2] - h[17][2]);
+  if (_x.lengthSq() < 1e-8) return null;
+  _x.normalize();
+  _z.crossVectors(_x, _y);
+  if (_z.lengthSq() < 1e-10) return null;
+  _z.normalize();
+  _y.crossVectors(_z, _x);
+  return out.setFromRotationMatrix(_m.makeBasis(_x, _y, _z));
+}
+
+const FINGER_CHAINS = [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16], [17, 18, 19, 20]];
+const _ident = new THREE.Quaternion();
+const _qs = new THREE.Quaternion(), _qt = new THREE.Quaternion();
+const _da = new THREE.Vector3(), _db = new THREE.Vector3();
+
+function blendHand(a, b, t) {
+  if (!a || !b || a.length < 21 || b.length < 21) return null;
+  if (!handQuat(a, _qa) || !handQuat(b, _qb)) return null;
+  const ia = _qi.copy(_qa).invert().clone(), ib = _qi.copy(_qb).invert().clone();
+  const q = _qa.clone().slerp(_qb, t);
+  const w = [0, 1, 2].map((k) => a[0][k] + (b[0][k] - a[0][k]) * t);
+  // 손 기준틀 안의 점들
+  const la = a.map((p) => new THREE.Vector3(p[0] - a[0][0], p[1] - a[0][1], p[2] - a[0][2]).applyQuaternion(ia));
+  const lb = b.map((p) => new THREE.Vector3(p[0] - b[0][0], p[1] - b[0][1], p[2] - b[0][2]).applyQuaternion(ib));
+  const lo = la.map((p, i) => p.clone().lerp(lb[i], t)); // 손바닥 뼈대(손가락 뿌리)는 직선 보간
+  // 손가락 마디는 "방향"을 구면 보간하고 길이를 따로 보간한다.
+  // 점을 직선으로 이으면 편 손가락 ↔ 쥔 손가락 사이에서 마디가 짧아지고 관절이 실제보다 더 꺾였다가 풀린다.
+  for (const ch of FINGER_CHAINS) {
+    for (let k = 1; k < ch.length; k++) {
+      _da.subVectors(la[ch[k]], la[ch[k - 1]]);
+      _db.subVectors(lb[ch[k]], lb[ch[k - 1]]);
+      const na = _da.length(), nb = _db.length();
+      if (na < 1e-6 || nb < 1e-6) { lo[ch[k]].copy(lo[ch[k - 1]]).add(_da.lerp(_db, t)); continue; }
+      _da.multiplyScalar(1 / na); _db.multiplyScalar(1 / nb);
+      _qs.setFromUnitVectors(_da, _db);
+      _da.applyQuaternion(_qt.copy(_ident).slerp(_qs, t)).multiplyScalar(na + (nb - na) * t);
+      lo[ch[k]].copy(lo[ch[k - 1]]).add(_da);
+    }
+  }
+  return lo.map((p) => { p.applyQuaternion(q); return [w[0] + p.x, w[1] + p.y, w[2] + p.z]; });
+}
+
+// 두 프레임 사이 (손은 회전을 살려서, 나머지는 직선 보간)
+export function blendFrame(a, b, t) {
+  const out = lerpFrame(a, b, t);
+  for (const side of ['left', 'right']) {
+    const h = blendHand(a[side], b[side], t);
+    if (h) out[side] = h;
+  }
+  return out;
+}
+
 // clips: [{ fps, frames }] (null이면 건너뜀)
 // options: transition(보간 프레임 수), pause(단어 사이 멈춤 프레임 수)
 // 반환: { fps, frames, segments: [{ index, start, end }] }  — index는 clips 배열의 위치
@@ -101,8 +165,16 @@ export function buildSequence(clips, { transition = 8, pause = 6 } = {}) {
       for (let p = 0; p < pause; p++) frames.push(prev);
       // 보간
       const next = fr[0];
-      for (let t = 1; t <= transition; t++) {
-        frames.push(lerpFrame(prev, next, easeInOut(t / (transition + 1))));
+      // 손을 크게 돌려야 하는 전환(예: 손끝이 아래인 지문자 → 위인 지문자)은 그만큼 시간을 더 준다.
+      // 사람 손목은 0.13초 만에 180° 돌지 못한다: 그대로 두면 아바타의 손이 따라가지 못해 손목이 출렁인다.
+      let turn = 0;
+      for (const side of ['left', 'right']) {
+        const ha = prev[side], hb = next[side];
+        if (ha && hb && ha.length >= 21 && hb.length >= 21 && handQuat(ha, _qa) && handQuat(hb, _qb)) turn = Math.max(turn, _qa.angleTo(_qb));
+      }
+      const steps = transition + Math.round(Math.max(0, turn - 1.0) / 0.42);
+      for (let t = 1; t <= steps; t++) {
+        frames.push(blendFrame(prev, next, easeInOut(t / (steps + 1))));
       }
     }
     const start = frames.length;

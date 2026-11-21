@@ -4496,6 +4496,18 @@
       "http://sldict.korean.go.kr/multimedia/multimedia_files/convert/20151220/231069/IMG000224972_700X466.jpg"
      ],
      "license": "[저작자표시-비영리-변경금지]"
+    },
+    {
+     "no": "4307",
+     "title": "혼신,온몸,몸,동체,몸뚱이,몸체,신체",
+     "url": "https://sldict.korean.go.kr/front/sign/signContentsView.do?origin_no=4307&top_category=CTE",
+     "description": "왼 손바닥을 오른쪽 가슴에 대고 오른 손바닥으로 가슴과 배에 크게 원을 그린다.",
+     "korean": "혼신,온몸,몸,동체,몸뚱이,몸체,신체",
+     "images": [
+      "http://sldict.korean.go.kr/multimedia/multimedia_files/convert/20151115/210474/IMG000200596_700X466.jpg"
+     ],
+     "license": "[저작자표시-비영리-변경금지]",
+     "note": "검수 중 고른 항목 — ‘몸’ 단독 표제어가 든 ‘혼신, 온몸, 몸, 신체’ 항목"
     }
    ]
   },
@@ -4556,6 +4568,30 @@
       "http://sldict.korean.go.kr/multimedia/multimedia_files/convert/20160325/254296/IMG000267261_700X466.jpg"
      ],
      "license": "[저작자표시-비영리-변경금지]"
+    },
+    {
+     "no": "7857",
+     "title": "운전,핸들",
+     "url": "https://sldict.korean.go.kr/front/sign/signContentsView.do?origin_no=7857&top_category=CTE",
+     "description": "가볍게 쥔 두 주먹을 가슴 앞으로 올려 좌우로 두 번 돌린다.",
+     "korean": "운전,핸들",
+     "images": [
+      "http://sldict.korean.go.kr/multimedia/multimedia_files/convert/20151225/234262/IMG000229102_700X466.jpg"
+     ],
+     "license": "[저작자표시-비영리-변경금지]",
+     "note": "검수 중 고른 항목 — ‘자동차’ 단독 표제어가 없어, 한국수어에서 차·자동차를 나타내는 ‘운전, 핸들’ 항목을 씀"
+    },
+    {
+     "no": "6956",
+     "title": "승용차",
+     "url": "https://sldict.korean.go.kr/front/sign/signContentsView.do?origin_no=6956&top_category=CTE",
+     "description": "왼손을 약간 구부려 등이 위로 향하게 하고, 오른손을 펴서 왼손 밑에서 전후로 두 번 움직인다.",
+     "korean": "승용차",
+     "images": [
+      "http://sldict.korean.go.kr/multimedia/multimedia_files/convert/20151226/235147/IMG000230255_700X466.jpg"
+     ],
+     "license": "[저작자표시-비영리-변경금지]",
+     "note": "참고 — ‘승용차’ 항목(다른 꼴). 쓰지 않음"
     }
    ]
   },
@@ -4953,7 +4989,20 @@
    ]
   },
   "그래서": {
-   "candidates": []
+   "candidates": [
+    {
+     "no": "6801",
+     "title": "때문,바람,탓,말미암다,인하다,-니까",
+     "url": "https://sldict.korean.go.kr/front/sign/signContentsView.do?origin_no=6801&top_category=CTE",
+     "description": "왼 주먹의 손가락 등을 오른 손바닥으로 가볍게 치며 손을 뗀다.",
+     "korean": "때문,바람,탓,말미암다,인하다,-니까",
+     "images": [
+      "http://sldict.korean.go.kr/multimedia/multimedia_files/convert/20151218/230385/IMG000224057_700X466.jpg"
+     ],
+     "license": "[저작자표시-비영리-변경금지]",
+     "note": "검수 중 고른 항목 — ‘그래서·그러므로·따라서’ 표제어가 없어, 까닭을 잇는 ‘때문, -니까, 말미암다’ 항목을 씀"
+    }
+   ]
   },
   "하지만": {
    "candidates": [
