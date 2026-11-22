@@ -254,6 +254,10 @@ const HAND_TURN_MAX = 14;     // 손이 돌 수 있는 최대 각속도 (rad/s, 
 const REMAP_POINTS = [0, 4, 8, 9, 12, 16, 20]; // 얼굴·몸통 보정을 구할 때 보는 손의 점
 const REST_Y0 = -1.4, REST_Y1 = -0.75; // 이 높이 아래는 '늘어뜨린 손'으로 본다 (사이는 서서히 바뀐다)
 const SPRING_STEP = 1 / 60;   // 스프링 본(머리카락·옷자락) 물리의 기준 시간 간격
+// 머리카락 가닥이 몸(옷) 표면에서 떨어져 있을 거리 (가닥 두께 절반쯤)
+const HAIR_BODY_GAP = 0.03;
+// 팔이 머리카락을 밀 때 한 단계에 겹친 양의 얼마만큼 밀어낼지 (1 = 한 번에 전부)
+const HAIR_ARM_SOFT = 0.5;
 const SOFT = 0.035;          // 몸에 닿기 전부터 서서히 밀리기 시작하는 거리
 const PROFILE_POW = 2.6;     // 몸통 단면의 둥근 정도 (2 = 타원, 클수록 네모) — 메시를 못 잰 경우에만 쓴다
 const PROFILE_NA = 48;       // 몸통 윤곽의 각도 칸 수
@@ -1038,7 +1042,7 @@ export class Avatar {
       }
       // 머리카락 마디(선분)와 팔(캡슐)의 충돌은 따로 처리한다 (_hairVsArms)
       this._hairJoints = hairJoints.filter((j) => j.child && j._currentTail && j._prevTail && !j.center)
-        .map((j) => ({ j, r: j.settings.hitRadius + 0.03, out: false, hold: 0 }));
+        .map((j) => ({ j, r: j.settings.hitRadius + 0.03, out: false, hold: 0, squeeze: 0, arm: false }));
       this._caps = Array.from({ length: 8 }, () => ({ a: new THREE.Vector3(), b: new THREE.Vector3(), r: 0 }));
       for (const hj of this._hairJoints) { const b = this._springBase.find((x) => x.j === hj.j); if (b) b.hj = hj; }
       // 충돌체를 더했으니 갱신 순서를 다시 계산하게 한다
@@ -1133,15 +1137,17 @@ export class Avatar {
         hD0.subVectors(hA, hB);
         if (hD0.dot(hN) < 0) {
           const tight = this._bodyDepth(hB, c.r + 2 * hj.r + 0.04);
-          if (tight > 0.03) hj.out = true; else if (tight <= 0) hj.out = false;
+          if (tight > 0.03 || hj.squeeze > 0.1) hj.out = true; else if (tight <= 0) hj.out = false;
           if (!hj.out && d2 > 1e-8) hN.copy(hD0).normalize();
         } else hj.out = false;
         const b = hD0.subVectors(hA, hB).dot(hN);
-        const t = Math.min(-b + Math.sqrt(Math.max(0, b * b - (d2 - need * need))), maxStep) * rootW;
+        // 한 번에 다 밀지 않고 겹친 만큼의 일부만 민다(부드러운 접촉): 팔이 스치며 머리카락을 툭툭 치는 떨림을 줄인다
+        const t = Math.min(-b + Math.sqrt(Math.max(0, b * b - (d2 - need * need))), maxStep) * rootW * HAIR_ARM_SOFT;
         hT.addScaledVector(hN, t / Math.max(_st[0], 0.3));
         hT.sub(hP0).setLength(len).add(hP0);
         moved = true;
       }
+      hj.arm = moved;
       if (!moved) continue;
       hj.hold = 1;
       // 한 번에 움직이는 양을 제한한다 (여러 캡슐에 한꺼번에 걸려도 머리카락이 순간 이동하지 않게)
@@ -1163,6 +1169,48 @@ export class Avatar {
     }
   }
 
+  // 머리카락이 몸(옷 포함)을 뚫지 않게 한다.
+  // 모델에 들어 있는 몸 충돌체는 가슴·배의 작은 공뿐이라, 헐렁한 옷 앞자락과 어깨 위로 늘어진 머리카락이 옷 속으로 들어가
+  // 옷과 머리카락이 번갈아 비쳐 치지직거린다. 메시에서 잰 실제 몸통 윤곽(_torsoPush)으로 마디 끝과 가운데를 검사해
+  // 들어가 있으면 몸 표면 바깥으로 마디를 돌려 낸다. 몸에 얹힌 동안은 제자리로 돌아가려는 힘을 줄여(hold) 안팎으로 떨지 않게 한다.
+  _hairVsBody(k) {
+    const hs = this._hairJoints;
+    if (!hs.length || !this.torsoOwners || this._noHairBody) return; // _noHairBody: 개발용 비교 스위치
+    const maxStep = 0.06 * k;
+    for (const hj of hs) {
+      const j = hj.j, bone = j.bone;
+      hP0.setFromMatrixPosition(bone.matrixWorld);
+      hP1.setFromMatrixPosition(j.child.matrixWorld);
+      const len = hP0.distanceTo(hP1);
+      if (len < 1e-4) continue;
+      // 끝점이 필요한 만큼 움직일 양: 끝에서 잰 것과, 가운데에서 잰 것을 끝으로 옮긴 것(두 배) 가운데 큰 쪽
+      let need = 0;
+      hT.set(0, 0, 0);
+      for (const t of [1, 0.5]) {
+        hA.copy(hP0).lerp(hP1, t);
+        const d = this._torsoPush(hA, HAIR_BODY_GAP, hN);
+        if (d > 0 && d / t > need) { need = d / t; hT.copy(hN).multiplyScalar(1 / t); }
+      }
+      if (need <= 0) continue;
+      hj.hold = 1;
+      if (hj.arm && need > 0.01) hj.squeeze = 1; // 팔과 몸 사이에 끼었다 → 다음부터 팔 앞으로 빼낸다
+      if (need > maxStep) hT.multiplyScalar(maxStep / need);
+      hT.add(hP1).sub(hP0).setLength(len).add(hP0);
+      // 마디를 새 끝점 쪽으로 돌리고, 물리 상태도 맞춘다 (_hairVsArms 와 같은 방식)
+      hD0.subVectors(hP1, hP0).normalize();
+      hD1.subVectors(hT, hP0).normalize();
+      hQ.setFromUnitVectors(hD0, hD1);
+      bone.getWorldQuaternion(hQw);
+      bone.parent.getWorldQuaternion(hQp);
+      bone.quaternion.copy(hQp.invert()).multiply(hQ).multiply(hQw);
+      bone.updateMatrix();
+      bone.updateWorldMatrix(false, true);
+      j._prevTail.add(hD0.subVectors(hT, hP1));
+      j._currentTail.copy(hT);
+      j._prevTail.lerp(j._currentTail, 0.6); // 몸에 스치는 동안은 마찰처럼 속도를 줄인다
+    }
+  }
+
   // vrm.update(dt)와 같은 순서로 갱신하되, 스프링 본은 프레임 속도와 무관하게 움직이도록 한다.
   // (three-vrm의 스프링 본은 "한 번 갱신할 때마다" 감쇠가 걸려서 화면 주사율에 따라 머리카락 움직임이 달라진다)
   _vrmUpdate(dt) {
@@ -1179,13 +1227,20 @@ export class Avatar {
         const st = b.j.settings;
         // 팔에 걸쳐 있는 머리카락 마디는 제자리로 돌아가려는 힘을 크게 줄인다.
         // (라이브러리가 매번 안쪽으로 당기고 여기서 다시 밀어내면 머리카락이 팔 위에서 톱니처럼 떤다. 팔에서 떨어지면 서서히 되돌린다.)
-        let hold = 1;
-        if (b.hj) { hold = 1 - 0.88 * b.hj.hold; b.hj.hold *= Math.exp(-h / 0.25); }
+        let hold = 1, drag = b.drag;
+        if (b.hj) {
+          const c = b.hj.hold;
+          hold = 1 - 0.88 * c;
+          // 팔·몸에 닿아 있는 동안은 공기 저항을 크게 해 끼인 머리카락이 안팎으로 떨지 않고 가라앉게 한다
+          drag = Math.max(drag, lerp(drag, 0.85, c));
+          b.hj.hold *= Math.exp(-h / 0.25);
+          b.hj.squeeze = (b.hj.squeeze || 0) * Math.exp(-h / 0.4);
+        }
         st.stiffness = b.stiffness * k * hold;
         st.gravityPower = b.gravity * k * hold;
-        st.dragForce = 1 - Math.pow(1 - b.drag, k);
+        st.dragForce = 1 - Math.pow(1 - drag, k);
       }
-      for (let i = 0; i < n; i++) { sm.update(h); this._hairVsArms(k); }
+      for (let i = 0; i < n; i++) { sm.update(h); this._hairVsArms(k); this._hairVsBody(k); }
     }
     if (vrm.materials) for (const m of vrm.materials) if (m.update) m.update(dt);
   }
