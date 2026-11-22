@@ -268,6 +268,13 @@ export class SignViewer {
 
     this.controls = null;
     if (interactive) {
+      // 마우스 휠은 페이지를 스크롤한다. 확대/축소는 Ctrl(맥은 ⌘)+휠이나 트랙패드 핀치, 터치 핀치로만.
+      // (OrbitControls 보다 먼저 등록해야 그 휠 처리 전에 실행된다)
+      el.addEventListener('wheel', (e) => {
+        if (!this.controls) return;
+        this.controls.enableZoom = e.ctrlKey || e.metaKey;
+        setTimeout(() => { if (this.controls) this.controls.enableZoom = true; }, 0);
+      }, { capture: true });
       this.controls = new OrbitControls(this.camera, el);
       this.controls.enableDamping = true;
       this.controls.dampingFactor = 0.12;

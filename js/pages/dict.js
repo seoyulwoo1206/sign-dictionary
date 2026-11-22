@@ -17,13 +17,19 @@ export async function render(root, ctx) {
     'aria-label': '단어 검색', autocomplete: 'off', enterkeyhint: 'search',
   });
   const catChips = h('div.chips.scroll', { role: 'group', 'aria-label': '카테고리' });
-  const lvChips = h('div.chips', { role: 'group', 'aria-label': '난이도' });
-  const stChips = h('div.chips', { role: 'group', 'aria-label': '동작 상태' });
-  const count = h('p.muted.small', { 'aria-live': 'polite' });
+  const lvChips = h('div.chips.scroll', { role: 'group', 'aria-label': '난이도' });
+  const stChips = h('div.chips.scroll', { role: 'group', 'aria-label': '동작 상태' });
+  const count = h('p.muted.small.result-count', { 'aria-live': 'polite' });
   const results = h('div.word-list');
+  const moreRow = h('div.more-row', { hidden: true });
+  // 단어가 많아도 화면이 무거워지지 않게 나눠서 보여 준다
+  const PAGE = 120;
+  let shown = PAGE;
+  let lastKey = '';
 
-  function chip(label, on, onClick) {
-    return h('button.chip', { type: 'button', class: on ? 'on' : '', 'aria-pressed': String(on), onclick: onClick }, label);
+  function chip(label, on, onClick, n) {
+    return h('button.chip', { type: 'button', class: on ? 'on' : '', 'aria-pressed': String(on), onclick: onClick },
+      label, n === undefined ? null : h('span.chip-count', n));
   }
 
   function renderFilters() {
@@ -32,14 +38,14 @@ export async function render(root, ctx) {
       ...categoriesOf(list).map((c) => chip(c, category === c, () => { category = category === c ? '' : c; update(); })),
     );
     clear(lvChips).append(
-      chip('모든 난이도', !level, () => { level = 0; update(); }),
+      chip('전체', !level, () => { level = 0; update(); }),
       ...[1, 2, 3, 4, 5].filter((n) => list.some((w) => w.level === n)).map((n) => chip(`난이도 ${n}`, level === n, () => { level = level === n ? 0 : n; update(); })),
     );
     const missing = list.filter((w) => !hasOwnSign(w)).length;
     clear(stChips).append(
-      chip('동작 전체', !status, () => { status = ''; update(); }),
-      chip(`동작 있음 ${list.length - missing}`, status === 'has', () => { status = status === 'has' ? '' : 'has'; update(); }),
-      chip(`녹화 필요 ${missing}`, status === 'missing', () => { status = status === 'missing' ? '' : 'missing'; update(); }),
+      chip('전체', !status, () => { status = ''; update(); }),
+      chip('동작 있음', status === 'has', () => { status = status === 'has' ? '' : 'has'; update(); }, list.length - missing),
+      chip('녹화 필요', status === 'missing', () => { status = status === 'missing' ? '' : 'missing'; update(); }, missing),
     );
   }
 
@@ -51,9 +57,23 @@ export async function render(root, ctx) {
     count.textContent = q.trim() ? `"${q.trim()}" 검색 결과 ${found.length}개` : `단어 ${found.length}개`;
     clear(results);
     if (!found.length) {
-      results.append(h('div.card', h('p', '찾는 단어가 없어요.'), h('a', { href: `#/sentence?q=${encodeURIComponent(q)}` }, '문장 → 수어에서 지문자로 보기 →')));
+      results.append(h('div.empty',
+        h('span.state-ico', { 'aria-hidden': 'true' }, '🔎'),
+        h('strong', '찾는 단어가 없어요'),
+        h('p.muted.small', q.trim() ? '철자를 확인하거나 필터를 풀어 보세요. 사전에 없는 말은 지문자로 볼 수 있어요.' : '필터를 풀어 보세요.'),
+        q.trim() ? h('a.btn.small.primary', { href: `#/sentence?q=${encodeURIComponent(q.trim())}` }, '지문자로 보기 →') : null,
+      ));
     }
-    for (const { entry, via } of found) {
+    // 검색 조건이 바뀌면 처음 묶음부터 다시
+    const key = [q.trim(), category, level, status].join('|');
+    if (key !== lastKey) { lastKey = key; shown = PAGE; }
+    const rest = found.length - shown;
+    clear(moreRow);
+    moreRow.hidden = rest <= 0;
+    if (rest > 0) {
+      moreRow.append(h('button.btn', { type: 'button', onclick: () => { shown += PAGE; update(); } }, `더 보기 (남은 ${rest}개)`));
+    }
+    for (const { entry, via } of found.slice(0, shown)) {
       results.append(h('a.card.word-card', { href: wordHref(entry.word) },
         h('h3', entry.word),
         h('p', entry.meaning),
@@ -80,13 +100,16 @@ export async function render(root, ctx) {
   input.addEventListener('input', update);
   root.append(
     h('div.stack',
-      h('h1', '수어 사전'),
-      h('div.search-box', input),
-      catChips,
-      lvChips,
-      stChips,
+      h('div.page-head', h('h1', '수어 사전'), h('p', `한국수어 단어 ${list.length}개를 3D 동작으로 찾아보세요.`)),
+      h('section.card.filters', { 'aria-label': '검색과 필터' },
+        h('div.search-box', input),
+        h('div.filter-row', h('span.filter-label', { 'aria-hidden': 'true' }, '분류'), catChips),
+        h('div.filter-row', h('span.filter-label', { 'aria-hidden': 'true' }, '난이도'), lvChips),
+        h('div.filter-row', h('span.filter-label', { 'aria-hidden': 'true' }, '동작'), stChips),
+      ),
       count,
       results,
+      moreRow,
     ),
   );
   update();

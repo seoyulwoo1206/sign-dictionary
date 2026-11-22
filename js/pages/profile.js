@@ -72,16 +72,16 @@ function build(root, c, redraw) {
   });
 
   root.append(h('div.stack',
-    h('h1', '내 정보'),
+    h('div.page-head', h('h1', '내 정보'), h('p', '학습 기록과 설정을 한곳에서 확인해요.')),
     h('section.stats', { 'aria-label': '통계' },
       h('div.stat', h('b', `🔥 ${currentStreak()}`), h('span', `연속 학습일 (최고 ${s.streak.best || 0})`)),
       h('div.stat', h('b', `⭐ ${s.xp}`), h('span', '총 XP')),
       h('div.stat', h('b', `${lessonsDone}/${c.lessons.length}`), h('span', '완료한 레슨')),
     ),
     h('section.stats',
-      h('div.stat', h('b', learned), h('span', '배운 단어')),
-      h('div.stat', h('b', mastered), h('span', '잘 아는 단어 (4박스+)')),
-      h('div.stat', h('b', s.daily.reviews), h('span', '오늘 복습')),
+      h('div.stat', h('b', String(learned)), h('span', '배운 단어')),
+      h('div.stat', h('b', String(mastered)), h('span', '잘 아는 단어 (4박스+)')),
+      h('div.stat', h('b', String(s.daily.reviews)), h('span', '오늘 복습')),
     ),
     h('section.card', h('h2', '최근 7일 XP'), week),
 
@@ -105,7 +105,7 @@ function build(root, c, redraw) {
       h('h2', '진도 저장'),
       h('p.muted.small', '진도는 이 브라우저에만 저장돼요. 기기를 바꾸거나 캐시를 지우기 전에 파일로 내보내 두세요.'),
       !storageOK ? h('p.notice.small', '지금은 브라우저 저장소를 쓸 수 없어서 메모리에만 저장되고 있어요.') : null,
-      h('div.row',
+      h('div.file-actions',
         h('button.btn', {
           type: 'button',
           onclick: () => {
@@ -119,8 +119,8 @@ function build(root, c, redraw) {
         h('button.btn', { type: 'button', onclick: () => fileInput.click() }, '⬆ 진도 가져오기'),
         fileInput,
         h('span.spacer'),
-        h('button.btn.ghost', {
-          type: 'button', style: { color: 'var(--bad)' },
+        h('button.btn.ghost.danger-text', {
+          type: 'button',
           onclick: () => {
             if (confirm('모든 진도(XP, 스트릭, 배운 단어)를 지울까요? 되돌릴 수 없어요.')) {
               resetProgress(); applyTheme(); toast('진도를 초기화했어요.'); redraw();

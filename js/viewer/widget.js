@@ -26,7 +26,7 @@ export function createViewerBlock(ctx, {
   if (legend) {
     const lg = document.createElement('div');
     lg.className = 'viewer-legend';
-    lg.innerHTML = '<span>드래그해서 돌려보기</span><span>궤적 색: <i style="background:var(--right)"></i>오른손 <i style="background:var(--left)"></i>왼손</span>';
+    lg.innerHTML = '<span>드래그해서 돌려보기 · Ctrl+휠로 확대</span><span>궤적 색: <i style="background:var(--right)"></i>오른손 <i style="background:var(--left)"></i>왼손</span>';
     wrap.append(lg);
   }
 

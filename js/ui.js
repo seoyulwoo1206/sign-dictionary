@@ -110,9 +110,13 @@ export function loadingView(text = '불러오는 중…') {
 export function errorView(err) {
   console.error(err);
   return h('div.error-box', { role: 'alert' },
+    h('span.state-ico', { 'aria-hidden': 'true' }, '😥'),
     h('strong', '문제가 생겼어요'),
     h('p', String(err && err.message ? err.message : err)),
-    h('p.muted', '로컬에서 열었다면 python -m http.server 로 서버를 띄워서 열어주세요 (file:// 주소로는 데이터를 불러올 수 없어요).'),
+    location.protocol === 'file:'
+      ? h('p.muted.small', '로컬에서 열었다면 python -m http.server 로 서버를 띄워서 열어주세요 (file:// 주소로는 데이터를 불러올 수 없어요).')
+      : h('p.muted.small', '잠시 뒤 다시 시도하거나 홈에서 다시 시작해 보세요.'),
+    h('a.btn.small', { href: '#/' }, '홈으로'),
   );
 }
 

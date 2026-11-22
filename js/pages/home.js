@@ -23,15 +23,17 @@ export async function render(root) {
         h('h1', streak > 0 ? `🔥 ${streak}일째 학습 중!` : '오늘 수어 한 단어 어때요?'),
         h('p', studiedToday() ? '오늘 학습 완료! 스트릭이 이어졌어요.' : '레슨 하나만 끝내도 스트릭이 이어져요.'),
         next
-          ? h('a.btn.big', { href: `#/lesson/${next.id}` }, `▶ 이어서 학습 · ${next.unit.title} – ${next.title}`)
-          : h('a.btn.big', { href: '#/learn' }, '🎉 모든 레슨 완료! 다시 하기'),
+          ? h('a.btn.big', { href: `#/lesson/${next.id}`, 'aria-label': `이어서 학습: ${next.unit.title} – ${next.title}` },
+            h('span.cta-ico', { 'aria-hidden': 'true', html: '<svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>' }),
+            h('span.cta-text', h('span', '이어서 학습'), h('small', `${next.unit.title} · ${next.title}`)))
+          : h('a.btn.big', { href: '#/learn', style: { justifyContent: 'center' } }, '🎉 모든 레슨 완료! 다시 하기'),
       ),
 
       h('section.card',
         h('h2', '오늘의 목표'),
         h('div.stack',
           h('div.goal-row',
-            h('span', `새 단어 (${goal.label})`),
+            h('span', '새 단어', h('small', `목표 ${goal.label}`)),
             h('div.progress', h('i', { style: { width: `${newPct}%` } })),
             h('b', `${s.daily.newWords}/${goal.newWords}`),
           ),
@@ -42,8 +44,8 @@ export async function render(root) {
           ),
         ),
         due.length
-          ? h('a.btn.primary', { href: '#/review', style: { marginTop: '14px', width: '100%' } }, `🔁 오늘 복습할 단어 ${due.length}개`)
-          : h('p.muted.small', { style: { marginTop: '12px', marginBottom: 0 } }, learned ? '오늘 복습할 단어가 없어요. 잘하고 있어요!' : '레슨을 끝내면 복습할 단어가 생겨요.'),
+          ? h('a.btn.primary.block', { href: '#/review', style: { marginTop: '16px' } }, `🔁 오늘 복습할 단어 ${due.length}개`)
+          : h('p.muted.small', { style: { marginTop: '14px', marginBottom: 0 } }, learned ? '오늘 복습할 단어가 없어요. 잘하고 있어요!' : '레슨을 끝내면 복습할 단어가 생겨요.'),
       ),
 
       h('section.stats', { 'aria-label': '학습 통계' },
@@ -52,10 +54,10 @@ export async function render(root) {
         h('div.stat', h('b', `📚 ${learned}`), h('span', '배운 단어')),
       ),
 
-      h('section.quick',
-        h('a.card', { href: '#/dict' }, h('span', '📖'), '사전', h('small', '단어 검색')),
-        h('a.card', { href: '#/sentence' }, h('span', '💬'), '문장 → 수어', h('small', '이어서 보기')),
-        h('a.card', { href: '#/learn' }, h('span', '🗺️'), '학습 경로', h('small', '유닛 지도')),
+      h('section.quick', { 'aria-label': '바로가기' },
+        h('a.card', { href: '#/dict' }, h('span.q-ico', { 'aria-hidden': 'true' }, '📖'), '사전', h('small', '단어 검색')),
+        h('a.card', { href: '#/sentence' }, h('span.q-ico', { 'aria-hidden': 'true' }, '💬'), '문장 → 수어', h('small', '이어서 보기')),
+        h('a.card', { href: '#/learn' }, h('span.q-ico', { 'aria-hidden': 'true' }, '🗺️'), '학습 경로', h('small', '유닛 지도')),
       ),
 
       h('p.notice.small',

@@ -35,7 +35,7 @@ export async function render(root) {
     return h('section.unit', { class: unitLocked ? 'locked' : '', 'aria-label': `유닛 ${u.title}` },
       h('div.unit-head',
         h('div', h('small', `유닛 ${c.units.indexOf(u) + 1} · 난이도 ${u.level}`), h('h2', u.title)),
-        h('span.badge', { style: { background: 'rgba(255,255,255,.2)', color: 'inherit' } }, `${done}/${unitLessons.length}`),
+        h('span.badge.unit-count', { 'aria-label': `레슨 ${unitLessons.length}개 중 ${done}개 완료` }, `${done}/${unitLessons.length}`),
       ),
       h('div.path',
         unitLessons.map((l) => {
@@ -60,8 +60,10 @@ export async function render(root) {
 
   root.append(
     h('div',
-      h('h1', '학습 경로'),
-      h('p.muted', '레슨 하나에 새 단어 3~5개. 앞 레슨을 끝내면 다음 레슨이 열려요.'),
+      h('div.page-head',
+        h('h1', '학습 경로'),
+        h('p', '레슨 하나에 새 단어 3~5개. 앞 레슨을 끝내면 다음 레슨이 열려요.'),
+      ),
       units,
     ),
   );

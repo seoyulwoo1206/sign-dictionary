@@ -16,11 +16,18 @@ export async function entryClip(entry) {
 }
 
 // text: 글자 문자열 또는 이미 나눈 자모 배열
-export async function fingerspellClip(text) {
+// pause/transition: 글자 사이 멈춤·이음 프레임 수 (끊어 보기에서는 길게)
+// segments[k].index = jamo 배열에서 그 글자의 위치
+export async function fingerspellClip(text, { pause = 2, transition = 4 } = {}) {
   const jamo = Array.isArray(text) ? text : decompose(text);
   const clips = await Promise.all(jamo.map((j) => loadSign(jamoSignPath(j)).catch(() => null)));
-  const seq = buildSequence(clips, { transition: 4, pause: 2 });
-  return seq.frames.length ? { fps: seq.fps, frames: seq.frames, fingerspelled: true } : null;
+  const seq = buildSequence(clips, { transition, pause });
+  return seq.frames.length ? { fps: seq.fps, frames: seq.frames, segments: seq.segments, jamo, fingerspelled: true } : null;
+}
+
+// 자모 한 글자의 동작
+export function jamoClip(jamo) {
+  return loadSign(jamoSignPath(jamo));
 }
 
 // 미리 불러올 파일 경로
@@ -36,10 +43,16 @@ export function getGlossIndex() {
 }
 
 // 토큰 하나의 클립. 못 찾은 토큰(none)은 null
-export async function tokenClip(token) {
+// opts: 지문자 토큰이면 fingerspellClip 에 넘긴다 (글자 사이 멈춤)
+export async function tokenClip(token, opts) {
   if (token.entry) return entryClip(token.entry);
-  if (token.type === 'fingerspell' && token.jamo?.length) return fingerspellClip(token.jamo);
+  if (isFingerspellToken(token)) return fingerspellClip(token.jamo, opts);
   return null;
+}
+
+// 지문자로 보여 주는 카드인지
+export function isFingerspellToken(token) {
+  return !token.entry && token.type === 'fingerspell' && !!token.jamo?.length;
 }
 
 // 토큰 배열 → { fps, frames, segments } (segments[k].index = 토큰 위치)

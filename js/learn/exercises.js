@@ -271,7 +271,7 @@ async function buildOrder(ex, env, scope, onChange, showSign) {
   }
   const question = showSign
     ? [h('h2', '문장 동작을 보고 단어 카드를 순서대로 놓으세요')]
-    : [h('h2', '이 문장을 수어 단어 순서대로 놓으세요'), h('p.big-word', { style: { fontSize: '1.4rem', marginBottom: '8px' } }, `“${ex.sentence}”`)];
+    : [h('h2', '이 문장을 수어 단어 순서대로 놓으세요'), h('p.big-word.quote', `“${ex.sentence}”`)];
 
   const el = showSign
     ? h('div.lesson-layout', h('div', viewerEl), h('div', h('span.step-tag', '문장 문제'), question, answerLine, bank))

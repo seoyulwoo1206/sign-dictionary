@@ -20,7 +20,15 @@ export async function render(root, ctx) {
   const word = ctx.params.word;
   const entry = byWord.get(word) || list.find((w) => w.forms?.includes(word) || w.synonyms?.includes(word));
   if (!entry) {
-    root.append(errorView(`"${word}"은(는) 사전에 없어요.`), h('p', h('a', { href: '#/dict' }, '← 사전으로')));
+    root.append(h('div.empty',
+      h('span.state-ico', { 'aria-hidden': 'true' }, '🔎'),
+      h('strong', `“${word}”은(는) 사전에 없어요`),
+      h('p.muted', '사전에서 다시 찾거나, 문장 → 수어에서 지문자로 볼 수 있어요.'),
+      h('div.row', { style: { justifyContent: 'center' } },
+        h('a.btn.small.primary', { href: '#/dict' }, '사전으로'),
+        h('a.btn.small', { href: `#/sentence?q=${encodeURIComponent(word)}` }, '지문자로 보기'),
+      ),
+    ));
     return;
   }
   if (entry.word !== word) { location.replace(wordHref(entry.word)); return; }
@@ -30,7 +38,7 @@ export async function render(root, ctx) {
   const syncStudy = () => {
     const on = isStudying(entry.word);
     studyBtn.textContent = on ? '✓ 학습 목록에 있음' : '＋ 학습 목록에 추가';
-    studyBtn.className = 'btn ' + (on ? '' : 'primary');
+    studyBtn.className = 'btn block ' + (on ? '' : 'primary');
     studyBtn.setAttribute('aria-pressed', String(on));
   };
   studyBtn.addEventListener('click', () => {
@@ -61,18 +69,18 @@ export async function render(root, ctx) {
 
   root.append(
     h('div.stack',
-      h('div.row',
+      h('nav.word-top', { 'aria-label': '단어 이동' },
         h('a.btn.small.ghost', { href: '#/dict' }, '← 사전'),
         h('span.spacer'),
-        prev ? h('a.btn.small', { href: wordHref(prev.word), 'aria-label': `이전 단어 ${prev.word}` }, `‹ ${prev.word}`) : null,
-        next ? h('a.btn.small', { href: wordHref(next.word), 'aria-label': `다음 단어 ${next.word}` }, `${next.word} ›`) : null,
+        prev ? h('a.btn.small', { href: wordHref(prev.word), 'aria-label': `이전 단어 ${prev.word}` }, '‹', h('span', prev.word)) : null,
+        next ? h('a.btn.small', { href: wordHref(next.word), 'aria-label': `다음 단어 ${next.word}` }, h('span', next.word), '›') : null,
       ),
       h('div.grid-2',
         h('div', block.el),
         h('div.stack',
-          h('div',
+          h('div.word-title',
             h('div.row', h('span.badge.plain', entry.category), levelDots(entry.level), verifiedBadge(entry)),
-            h('h1.big-word', { style: { marginTop: '8px' } }, entry.word),
+            h('h1.big-word', entry.word),
           ),
           h('div.card', info),
           entry.ref ? refCard(entry.ref) : null,

@@ -62,6 +62,8 @@ async function route() {
     onCleanup: (fn) => cleanups.push(fn),
     isCurrent: () => id === renderId,
   };
+  // 새 화면은 맨 위에서 시작 (렌더가 오래 걸리는 화면도 바로 올라가게 먼저 올린다)
+  if (!query.has('keep-scroll')) window.scrollTo(0, 0);
   try {
     const mod = await route.load();
     if (id !== renderId) return;

@@ -16,7 +16,7 @@ export async function render(root, ctx) {
   const lesson = c.lessonById.get(ctx.params.id);
   if (!lesson) { root.append(errorView('레슨을 찾을 수 없어요.')); return; }
   if (!isUnlocked(c, lesson)) {
-    root.append(h('div.card', h('h2', '🔒 아직 잠겨 있어요'), h('p', '앞 레슨을 먼저 끝내 주세요.'), h('a.btn.primary', { href: '#/learn' }, '학습 경로로')));
+    root.append(h('div.empty', h('span.state-ico', { 'aria-hidden': 'true' }, '🔒'), h('strong', '아직 잠겨 있어요'), h('p.muted', '앞 레슨을 먼저 끝내 주세요.'), h('a.btn.primary', { href: '#/learn' }, '학습 경로로')));
     return;
   }
 
@@ -121,7 +121,7 @@ export async function render(root, ctx) {
       perfect ? h('p', '실수 없이 끝냈어요! 보너스 +5 XP') : h('p.muted', `틀린 문제 ${mistakes}개 — 복습에서 다시 만나요.`),
       res.streakUp ? h('p', `🔥 스트릭 ${currentStreak()}일!`) : null,
       res.newWords ? h('p.muted', `새 단어 ${res.newWords}개가 복습 목록에 들어갔어요.`) : null,
-      h('div.stack', { style: { marginTop: '20px' } },
+      h('div.actions',
         next ? h('a.btn.primary.big', { href: `#/lesson/${next.id}` }, `다음 레슨: ${next.title}`) : null,
         h('a.btn.big', { href: '#/learn' }, '학습 경로로'),
       ),
@@ -178,7 +178,7 @@ async function sentenceStep(body, step, ctx, answer) {
       h('div', vb.el),
       h('div',
         h('span.step-tag', '문장 연습'),
-        h('h1.big-word', { style: { fontSize: '1.5rem' } }, `“${step.sentence}”`),
+        h('h1.big-word.quote', `“${step.sentence}”`),
         h('p.muted', '수어 단어 순서:'),
         h('div.gloss-cards', cards),
         ...(step.notes || []).map((n) => h('p.notice.info.small', n)),

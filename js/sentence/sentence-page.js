@@ -4,7 +4,11 @@ import { createViewerBlock } from '../viewer/widget.js';
 import { segmentAt } from '../viewer/sequencer.js';
 import { gloss, lookupWord } from './glosser.js';
 import { decompose } from './fingerspell.js';
-import { getGlossIndex, sentenceClip, tokenClip, tokenLabel, TYPE_LABELS } from './clips.js';
+import { getGlossIndex, sentenceClip, tokenClip, tokenLabel, TYPE_LABELS, jamoClip, isFingerspellToken } from './clips.js';
+
+// 하나씩 모드에서 지문자를 끊어 보여 줄 때 글자 사이 멈춤·이음 (30fps 프레임)
+const SPELL_PAUSE = 16;
+const SPELL_TRANSITION = 8;
 
 const EXAMPLES = ['나는 학교에 갔어요', '만나서 반갑습니다', '엄마가 밥을 먹었어요?', '친구가 물을 마셔요', '철수는 어디에 가요?'];
 const DISCLAIMER = '한국수어는 한국어와 문법이 다른 독립된 언어입니다. 이 기능은 단어를 수어로 바꿔 나열해 표현을 돕는 보조 도구이며, 정확한 수어 번역이 아닙니다.';
@@ -16,6 +20,8 @@ export async function render(root, ctx) {
   let flags = { isPast: false, isQuestion: false };
   let mode = 'all';      // all: 이어서 재생 / one: 하나씩
   let current = 0;       // 하나씩 모드의 현재 카드
+  let letter = -1;       // 하나씩 모드 지문자 카드: -1 = 글자를 끊어 차례로, k = k번째 글자만
+  let spellSeq = null;   // 하나씩 모드 지문자 클립 (글자 구간 포함)
   let pause = 6;         // 단어 사이 쉬는 프레임
   let seq = null;
   let buildId = 0;
@@ -38,24 +44,28 @@ export async function render(root, ctx) {
   const cardsBox = h('div.gloss-cards', { role: 'list', 'aria-label': '수어 단어 카드' });
   const modeSeg = h('div.seg', { role: 'group', 'aria-label': '재생 방식' });
   const modeExtra = h('div.row');
+  const jamoBox = h('div.jamo-strip', { hidden: true, role: 'group', 'aria-label': '지문자 글자' });
   const block = createViewerBlock(ctx, { keyboard: true });
   block.player.setLoop(false);
 
   root.append(h('div.stack',
-    h('h1', '문장 → 수어'),
+    h('div.page-head', h('h1', '문장 → 수어'), h('p', '한국어 문장을 수어 단어 순서로 바꿔 이어서 보여 줘요.')),
+    h('section.card.compose', { 'aria-label': '문장 입력' },
+      form,
+      examples,
+      h('label.check', doneToggle, '과거형이면 문장 끝에 "끝(완료)" 수어 붙이기'),
+    ),
     h('p.notice.disclaimer', { role: 'note' }, '⚠️ ', DISCLAIMER),
-    form,
-    examples,
-    h('label.row.small', { style: { cursor: 'pointer' } }, doneToggle, '과거형이면 문장 끝에 "끝(완료)" 수어 붙이기'),
     result,
   ));
   result.append(
     notesBox,
     h('div',
-      h('div.row', h('h2', { style: { margin: 0 } }, '수어 단어 순서'), h('span.spacer'), h('span.small.muted', '카드를 눌러 바꾸기 · 끌어서 순서 바꾸기')),
+      h('div.gloss-head', h('h2', '수어 단어 순서'), h('span.small.muted', '카드를 눌러 바꾸기 · 끌어서 순서 바꾸기')),
       cardsBox,
     ),
-    h('div.row', modeSeg, h('span.spacer'), modeExtra),
+    h('div.mode-row', modeSeg, modeExtra),
+    jamoBox,
     block.el,
     h('div.row',
       h('button.btn.small', { type: 'button', onclick: share }, '🔗 공유 링크 복사'),
@@ -65,9 +75,14 @@ export async function render(root, ctx) {
 
   // 재생 중인 카드 강조
   const off = block.player.on((type, p) => {
-    if (type !== 'time' || mode !== 'all' || !seq) return;
-    const k = segmentAt(seq, p.time);
-    highlight(k >= 0 ? seq.segments[k].index : -1);
+    if (type !== 'time') return;
+    if (mode === 'all' && seq) {
+      const k = segmentAt(seq, p.time);
+      highlight(k >= 0 ? seq.segments[k].index : -1);
+    } else if (mode === 'one' && spellSeq && letter < 0) {
+      const k = segmentAt(spellSeq, p.time);
+      highlightLetter(k >= 0 ? spellSeq.segments[k].index : -1);
+    }
   });
   ctx.onCleanup(off);
 
@@ -79,6 +94,38 @@ export async function render(root, ctx) {
     });
   }
 
+  function highlightLetter(i) {
+    jamoBox.querySelectorAll('[data-k]').forEach((c) => {
+      const on = Number(c.dataset.k) === i;
+      c.classList.toggle('playing', on);
+      if (letter < 0) c.setAttribute('aria-current', on ? 'true' : 'false');
+    });
+  }
+
+  // 하나씩 모드에서 지문자 카드면 글자 줄을 보여 준다
+  function drawJamo() {
+    clear(jamoBox);
+    const t = tokens[current];
+    jamoBox.hidden = !(mode === 'one' && t && isFingerspellToken(t));
+    if (jamoBox.hidden) return;
+    const pick = (k) => { letter = k; drawJamo(); rebuild(); };
+    jamoBox.append(
+      h('span.small.muted', '지문자 — 글자를 눌러 하나씩 보기'),
+      h('div.jamo-row',
+        h('button.chip', { type: 'button', class: letter < 0 ? 'on' : '', 'aria-pressed': String(letter < 0), onclick: () => pick(-1) }, '차례로'),
+        t.jamo.map((j, k) => h('button.jamo-chip', {
+          type: 'button', 'data-k': k, class: letter === k ? 'on' : '', 'aria-pressed': String(letter === k),
+          'aria-label': `${k + 1}번째 글자 ${j}`, onclick: () => pick(k),
+        }, j)),
+      ),
+    );
+    if (letter >= 0) jamoBox.append(h('div.row',
+        h('button.btn.small', { type: 'button', disabled: letter <= 0, onclick: () => pick(letter - 1) }, '‹ 앞 글자'),
+        h('span.small', `${letter + 1} / ${t.jamo.length}`),
+        h('button.btn.small.primary', { type: 'button', disabled: letter >= t.jamo.length - 1, onclick: () => pick(letter + 1) }, '다음 글자 ›'),
+    ));
+  }
+
   function analyze() {
     const q = input.value.trim();
     if (!q) { result.hidden = true; return; }
@@ -87,6 +134,7 @@ export async function render(root, ctx) {
     notes = g.notes || [];
     flags = { isPast: g.isPast, isQuestion: g.isQuestion };
     current = 0;
+    letter = -1;
     result.hidden = false;
     const hash = `#/sentence?q=${encodeURIComponent(q)}${addCompletion ? '&done=1' : ''}`;
     if (location.hash !== hash) history.replaceState(null, '', hash);
@@ -94,9 +142,11 @@ export async function render(root, ctx) {
   }
 
   function refresh() {
+    letter = -1;
     drawNotes();
     drawCards();
     drawMode();
+    drawJamo();
     rebuild();
   }
 
@@ -196,21 +246,21 @@ export async function render(root, ctx) {
   // ---------- 재생 방식 ----------
   function drawMode() {
     clear(modeSeg).append(
-      h('button.pc-btn', { type: 'button', class: mode === 'all' ? 'on' : '', 'aria-pressed': String(mode === 'all'), onclick: () => { mode = 'all'; drawMode(); rebuild(); } }, '이어서 재생'),
-      h('button.pc-btn', { type: 'button', class: mode === 'one' ? 'on' : '', 'aria-pressed': String(mode === 'one'), onclick: () => { mode = 'one'; current = 0; drawMode(); rebuild(); } }, '하나씩'),
+      h('button.pc-btn', { type: 'button', class: mode === 'all' ? 'on' : '', 'aria-pressed': String(mode === 'all'), onclick: () => { mode = 'all'; letter = -1; drawMode(); drawJamo(); rebuild(); } }, '이어서 재생'),
+      h('button.pc-btn', { type: 'button', class: mode === 'one' ? 'on' : '', 'aria-pressed': String(mode === 'one'), onclick: () => { mode = 'one'; current = 0; letter = -1; drawMode(); drawJamo(); rebuild(); } }, '하나씩'),
     );
     clear(modeExtra);
     if (mode === 'all') {
-      const slider = h('input', { type: 'range', min: 0, max: 30, step: 1, value: pause, 'aria-label': '단어 사이 쉬는 시간', style: { width: '120px', accentColor: 'var(--accent)' } });
+      const slider = h('input', { type: 'range', min: 0, max: 30, step: 1, value: pause, 'aria-label': '단어 사이 쉬는 시간' });
       const val = h('span.small.muted', `${(pause / 30).toFixed(1)}초`);
       slider.addEventListener('input', () => { pause = Number(slider.value); val.textContent = `${(pause / 30).toFixed(1)}초`; });
       slider.addEventListener('change', rebuild);
       modeExtra.append(h('span.small', '쉬는 시간'), slider, val);
     } else {
       modeExtra.append(
-        h('button.btn.small', { type: 'button', disabled: current <= 0, onclick: () => { current--; drawMode(); rebuild(); } }, '‹ 이전 단어'),
+        h('button.btn.small', { type: 'button', disabled: current <= 0, onclick: () => { current--; letter = -1; drawMode(); drawJamo(); rebuild(); } }, '‹ 이전 단어'),
         h('span.small', `${Math.min(current + 1, tokens.length)} / ${tokens.length}`),
-        h('button.btn.small.primary', { type: 'button', disabled: current >= tokens.length - 1, onclick: () => { current++; drawMode(); rebuild(); } }, '다음 단어 ›'),
+        h('button.btn.small.primary', { type: 'button', disabled: current >= tokens.length - 1, onclick: () => { current++; letter = -1; drawMode(); drawJamo(); rebuild(); } }, '다음 단어 ›'),
       );
     }
   }
@@ -227,9 +277,16 @@ export async function render(root, ctx) {
       if (!s.frames.length) toast('재생할 수 있는 동작이 없어요.');
     } else {
       seq = null;
+      spellSeq = null;
       highlight(current);
-      const clip = await tokenClip(tokens[current]).catch(() => null);
+      const t = tokens[current];
+      const spell = t && isFingerspellToken(t);
+      const clip = await (spell && letter >= 0
+        ? jamoClip(t.jamo[letter])
+        : tokenClip(t, { pause: SPELL_PAUSE, transition: SPELL_TRANSITION })).catch(() => null);
       if (id !== buildId || !ctx.isCurrent()) return;
+      if (spell && letter < 0 && clip?.segments) spellSeq = clip;
+      highlightLetter(letter);
       block.player.setLoop(true);
       block.viewer.setClip(clip);
       if (!clip) toast('이 카드는 동작이 없어요. 카드를 눌러 다른 단어로 바꿔 보세요.');
