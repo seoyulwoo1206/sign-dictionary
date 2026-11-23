@@ -19,16 +19,23 @@ import {
   VRMSpringBoneCollider, VRMSpringBoneColliderShapeCapsule, VRMSpringBoneColliderShapeSphere,
 } from '@pixiv/three-vrm';
 import { FACE_GROUP_RANGES, FACE_COUNT } from './landmarks.js';
+import { getCustomAvatar, isGlb } from './avatar-store.js';
 
 // 먼저 있는 파일을 쓴다. (_local-test 는 로컬 확인용, 배포되지 않음)
 export const AVATAR_URLS = ['assets/avatar.vrm', '_local-test/sample.vrm'];
 const POOL_MAX = 6;
 
 // ---------- 파일 받기 (한 번만) ----------
+// 내 정보에서 불러온 내 아바타(이 브라우저에 보관)가 있으면 그것부터 쓴다.
 let filePromise = null;
+let skipCustom = false;
 function fetchAvatarFile() {
   if (!filePromise) {
     filePromise = (async () => {
+      if (!skipCustom) {
+        const mine = await getCustomAvatar();
+        if (mine) return { url: document.baseURI, buffer: mine.buffer, custom: true };
+      }
       for (const rel of AVATAR_URLS) {
         try {
           const url = new URL(rel, document.baseURI).href;
@@ -36,7 +43,7 @@ function fetchAvatarFile() {
           if (!res.ok) continue;
           const buffer = await res.arrayBuffer();
           // glb 매직 넘버 'glTF' 확인 (404 대신 HTML을 주는 서버 대비)
-          if (buffer.byteLength < 20 || new DataView(buffer).getUint32(0, true) !== 0x46546c67) continue;
+          if (!isGlb(buffer)) continue;
           return { url, buffer };
         } catch { /* 다음 후보 */ }
       }
@@ -83,11 +90,24 @@ export async function loadAvatar() {
     vrm.scene.traverse((o) => { o.frustumCulled = false; });
     return new Avatar(vrm);
   } catch (err) {
+    // 내 아바타 파일이 깨졌거나 VRM이 아니면 기본 아바타로 한 번 더 시도한다
+    const file = await filePromise;
+    if (file?.custom && !skipCustom) {
+      console.warn('[avatar] 내 아바타를 읽지 못해 기본 아바타를 씁니다:', err);
+      customFailed = true;
+      skipCustom = true;
+      filePromise = null;
+      return loadAvatar();
+    }
     console.warn('[avatar] 아바타를 불러오지 못해 마네킹으로 표시합니다:', err);
     unavailable = true;
     return null;
   }
 }
+
+// 내 아바타 파일을 읽다가 실패했는지 (내 정보 화면 안내용)
+let customFailed = false;
+export function customAvatarFailed() { return customFailed; }
 
 // 같은 파일을 여러 번 파싱해도 텍스처는 GPU에 한 번만 올라가게 한다
 function shareTextures(gltf) {

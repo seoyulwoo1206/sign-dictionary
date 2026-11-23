@@ -1,16 +1,23 @@
 // 사전 검색 화면
 import { h, clear, verifiedBadge, levelDots, wordHref } from '../ui.js';
-import { loadWords } from '../data.js';
+import { loadWords, loadReview, signKind } from '../data.js';
 import { searchWords, categoriesOf } from '../dict/search.js';
 import { isStudying } from '../learn/progress.js';
 import { hasOwnSign } from '../sentence/clips.js';
 
 export async function render(root, ctx) {
-  const { list } = await loadWords();
+  const [{ list }, review] = await Promise.all([loadWords(), loadReview()]);
   const q0 = ctx.query.get('q') || '';
   let category = ctx.query.get('cat') || '';
   let level = Number(ctx.query.get('lv') || 0);
-  let status = ctx.query.get('st') || ''; // '' | 'has' | 'missing'
+  let status = ctx.query.get('st') || ''; // '' | 'dict' | 'guess' | 'check' | 'missing'
+  // 동작 근거로 거르기: 사전 기반 / 추정 / 확인 필요(영상과 비교할 단어) / 녹화 필요(동작 없음)
+  const statusOf = {
+    dict: (w) => signKind(w) === 'dict' || signKind(w) === 'recorded',
+    guess: (w) => signKind(w) === 'guess',
+    check: (w) => review.has(w.word) || signKind(w) === 'guess',
+    missing: (w) => !hasOwnSign(w),
+  };
 
   const input = h('input.input', {
     type: 'search', value: q0, placeholder: '단어 검색 (초성도 돼요: ㄱㅅ)',
@@ -41,11 +48,14 @@ export async function render(root, ctx) {
       chip('전체', !level, () => { level = 0; update(); }),
       ...[1, 2, 3, 4, 5].filter((n) => list.some((w) => w.level === n)).map((n) => chip(`난이도 ${n}`, level === n, () => { level = level === n ? 0 : n; update(); })),
     );
-    const missing = list.filter((w) => !hasOwnSign(w)).length;
+    const n = (k) => list.filter(statusOf[k]).length;
+    const st = (k, label) => chip(label, status === k, () => { status = status === k ? '' : k; update(); }, n(k));
     clear(stChips).append(
       chip('전체', !status, () => { status = ''; update(); }),
-      chip('동작 있음', status === 'has', () => { status = status === 'has' ? '' : 'has'; update(); }, list.length - missing),
-      chip('녹화 필요', status === 'missing', () => { status = status === 'missing' ? '' : 'missing'; update(); }, missing),
+      st('dict', '사전 기반'),
+      st('guess', '추정 동작'),
+      st('check', '확인 필요'),
+      n('missing') ? st('missing', '녹화 필요') : '',
     );
   }
 
@@ -53,7 +63,7 @@ export async function render(root, ctx) {
     renderFilters();
     const q = input.value;
     const found = searchWords(list, q, { category, level })
-      .filter(({ entry }) => !status || (status === 'has') === hasOwnSign(entry));
+      .filter(({ entry }) => !status || !statusOf[status] || statusOf[status](entry));
     count.textContent = q.trim() ? `"${q.trim()}" 검색 결과 ${found.length}개` : `단어 ${found.length}개`;
     clear(results);
     if (!found.length) {
@@ -83,6 +93,7 @@ export async function render(root, ctx) {
           via && via !== entry.word ? h('span.badge.info', via === '뜻' ? '뜻에서 찾음' : `“${via}”`) : null,
           isStudying(entry.word) ? h('span.badge.ok', '학습 중') : null,
           !hasOwnSign(entry) ? h('span.badge.warn', { title: '동작 녹화 전이라 지문자로 보여 줘요' }, '지문자') : null,
+          signKind(entry) === 'guess' ? h('span.badge.warn', { title: '사전에 항목이 없어 추정해 만든 동작' }, '추정') : null,
           entry.verified ? verifiedBadge(entry) : null,
         ),
       ));

@@ -25,6 +25,25 @@ export function loadWords() {
   return wordsPromise;
 }
 
+// 영상·농인 확인이 필요한 단어와 이유 (data/review.json). 없거나 실패하면 빈 목록
+let reviewPromise = null;
+export function loadReview() {
+  if (!reviewPromise) {
+    reviewPromise = fetchJSON('review.json')
+      .then((o) => new Map(Object.entries(o).filter(([k]) => !k.startsWith('_'))))
+      .catch(() => new Map());
+  }
+  return reviewPromise;
+}
+
+// 동작의 근거: recorded(직접 녹화) | dict(사전 설명 기반) | guess(사전 항목 없이 추정) | placeholder(임시) | missing(없음, 지문자)
+export function signKind(entry) {
+  if (!entry?.sign) return 'missing';
+  if (entry.signStatus === 'recorded') return 'recorded';
+  if (entry.signStatus === 'placeholder') return 'placeholder';
+  return entry.ref ? 'dict' : 'guess';
+}
+
 export function loadCurriculum() {
   if (!curriculumPromise) {
     curriculumPromise = fetchJSON('curriculum.json').then((c) => {

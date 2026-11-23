@@ -16,8 +16,14 @@ function saveDone(set) {
 }
 
 // words.json을 한 줄에 항목 하나씩 저장 (변경 내역을 보기 쉽게)
+// tools/gen-fake-data.mjs 와 같은 꼴(쉼표·콜론 뒤 띄어쓰기)로 써서, 녹화 하나를 저장해도 그 줄만 바뀌게 한다
+function pretty(v) {
+  if (Array.isArray(v)) return '[' + v.map(pretty).join(', ') + ']';
+  if (v && typeof v === 'object') return '{' + Object.entries(v).map(([k, x]) => `${JSON.stringify(k)}: ${pretty(x)}`).join(', ') + '}';
+  return JSON.stringify(v);
+}
 function stringifyWords(list) {
-  return '[\n' + list.map((e) => '  ' + JSON.stringify(e)).join(',\n') + '\n]\n';
+  return '[\n' + list.map((e) => '  ' + pretty(e)).join(',\n') + '\n]\n';
 }
 
 // api: recorder.js가 넘겨주는 함수들

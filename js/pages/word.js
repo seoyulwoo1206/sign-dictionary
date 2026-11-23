@@ -1,6 +1,6 @@
 // 단어 상세: 뷰어 + 뜻 + 동작 설명 + 손모양 + 비수지 신호 + 검수 배지
 import { h, verifiedBadge, levelDots, toast, wordHref, errorView } from '../ui.js';
-import { loadWords } from '../data.js';
+import { loadWords, loadReview, signKind } from '../data.js';
 import { entryClip, hasOwnSign } from '../sentence/clips.js';
 import { createViewerBlock } from '../viewer/widget.js';
 import { addToStudy, removeFromStudy, isStudying } from '../learn/progress.js';
@@ -16,7 +16,7 @@ function refCard(ref) {
 }
 
 export async function render(root, ctx) {
-  const { list, byWord } = await loadWords();
+  const [{ list, byWord }, review] = await Promise.all([loadWords(), loadReview()]);
   const word = ctx.params.word;
   const entry = byWord.get(word) || list.find((w) => w.forms?.includes(word) || w.synonyms?.includes(word));
   if (!entry) {
@@ -89,9 +89,12 @@ export async function render(root, ctx) {
             ? h('p.notice.small', h('b', '동작 녹화 필요'), ' — 이 단어의 수어 동작은 아직 녹화되지 않아서 지문자로 보여 주고 있어요. ', h('a', { href: 'recorder.html?word=' + encodeURIComponent(entry.word) }, '지금 녹화하기 →'))
             : entry.signStatus === 'placeholder'
               ? h('p.notice.small', h('b', '임시 동작'), ' — 기능 시험용으로 만든 가짜 동작이라 실제 한국수어와 달라요. ', h('a', { href: 'recorder.html?word=' + encodeURIComponent(entry.word) }, '진짜 동작 녹화하기 →'))
-              : entry.signStatus === 'described'
-                ? h('p.notice.small', h('b', '설명 기반 동작'), ' — 국립국어원 한국수어사전의 수형 설명을 보고 만든 동작이에요. 실제 영상과 다를 수 있으니 위 링크의 영상과 꼭 비교해 보세요.')
-                : !entry.verified ? h('p.notice.small', '검수 전 데이터예요. 학습 참고용으로만 써 주세요.') : null,
+              : signKind(entry) === 'guess'
+                ? h('p.notice.small', h('b', '추정 동작'), ' — 국립국어원 한국수어사전에 이 단어 항목이 없어서, 사전에 있는 다른 수어를 이어 붙이거나 일반적으로 쓰는 표현으로 만든 동작이에요. 농인에게 확인받기 전까지는 참고용으로만 써 주세요.')
+                : entry.signStatus === 'described'
+                  ? h('p.notice.small', h('b', '설명 기반 동작'), ' — 국립국어원 한국수어사전의 수형 설명을 보고 만든 동작이에요. 실제 영상과 다를 수 있으니 위 링크의 영상과 꼭 비교해 보세요.')
+                  : !entry.verified ? h('p.notice.small', '검수 전 데이터예요. 학습 참고용으로만 써 주세요.') : null,
+          review.get(entry.word) ? h('p.notice.small', h('b', '확인 필요'), ' — ', review.get(entry.word)) : null,
         ),
       ),
     ),

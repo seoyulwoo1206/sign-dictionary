@@ -89,9 +89,14 @@ for (const w of words) {
 }
 writeFileSync(wordsPath, '[\n' + words.map((w) => '  ' + pretty(w)).join(',\n') + '\n]\n');
 
-let jamoMade = 0;
+let jamoMade = 0, jamoSkipped = 0;
 for (const [j, def] of Object.entries(JAMO)) {
   if (only.length && !only.includes(j)) continue;
+  // 녹화 도구로 직접 녹화한 지문자(source: self-recorded)는 덮어쓰지 않는다
+  try {
+    const head = readFileSync(join(ROOT, 'data', 'fingerspelling', `${j}.json`), 'utf8').slice(0, 400);
+    if (/"source"\s*:\s*"self-recorded"/.test(head)) { jamoSkipped++; continue; }
+  } catch { /* 파일이 없으면 새로 만든다 */ }
   const ref = refOf(j, def.ref);
   // 지문자는 짧고 많이 이어 붙이므로 15fps로 저장한다 (뷰어가 프레임 사이를 보간함)
   // 이어 붙였을 때 글자마다 눈을 깜빡이면 어색하므로 가끔만 깜빡인다
@@ -102,4 +107,4 @@ for (const [j, def] of Object.entries(JAMO)) {
   jamoMade++;
 }
 const authored = words.filter((w) => SIGNS[w.word]).length;
-console.log(`단어 ${made}개 생성 (정의된 단어 ${authored}개 / 전체 ${words.length}개${skipped ? `, 녹화본이 있어 건너뜀 ${skipped}개` : ''}), 지문자 ${jamoMade}개 생성 (총 ${(total / 1024 / 1024).toFixed(2)} MB)`);
+console.log(`단어 ${made}개 생성 (정의된 단어 ${authored}개 / 전체 ${words.length}개${skipped ? `, 녹화본이 있어 건너뜀 ${skipped}개` : ''}), 지문자 ${jamoMade}개 생성${jamoSkipped ? ` (녹화본이 있어 건너뜀 ${jamoSkipped}개)` : ''} (총 ${(total / 1024 / 1024).toFixed(2)} MB)`);

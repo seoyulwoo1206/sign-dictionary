@@ -6,18 +6,59 @@ import {
 } from '../learn/progress.js';
 import { dateKey, addDays } from '../learn/srs.js';
 import { refreshViewerAvatar } from '../viewer/viewer.js';
+import { getCustomAvatar, saveCustomAvatar, clearCustomAvatar } from '../viewer/avatar-store.js';
+import { customAvatarFailed } from '../viewer/avatar.js';
 
 export async function render(root, ctx) {
-  const c = await loadCurriculum();
+  const [c, mine] = await Promise.all([loadCurriculum(), getCustomAvatar()]);
   const draw = () => {
     root.replaceChildren();
-    build(root, c, draw);
+    build(root, c, draw, mine);
   };
   draw();
   void ctx;
 }
 
-function build(root, c, redraw) {
+// 내 VRM 아바타 불러오기 / 되돌리기 (파일은 이 브라우저에만 보관)
+function avatarFileRow(mine) {
+  const input = h('input', { type: 'file', accept: '.vrm,model/gltf-binary', hidden: true, 'aria-label': 'VRM 파일 고르기' });
+  input.addEventListener('change', async () => {
+    const f = input.files?.[0];
+    input.value = '';
+    if (!f) return;
+    try {
+      await saveCustomAvatar(f);
+      toast('내 아바타를 저장했어요. 화면을 다시 불러올게요.', { type: 'good' });
+      setTimeout(() => location.reload(), 700);
+    } catch (err) {
+      toast(err.message || '파일을 저장하지 못했어요.', { type: 'bad' });
+    }
+  });
+  const mb = (n) => (n / 1048576).toFixed(1) + 'MB';
+  return h('div.settings-row.avatar-file',
+    h('span', '내 아바타'),
+    h('div.stack-tight',
+      h('p.small.muted', mine
+        ? `지금: ${mine.name} (${mb(mine.size)}) — 이 브라우저에만 저장돼 있어요.`
+        : 'VRoid Studio 등에서 만든 VRM(.vrm) 파일을 불러와 3D 아바타로 쓸 수 있어요. 파일은 서버로 보내지 않고 이 브라우저에만 저장돼요.'),
+      mine && customAvatarFailed() ? h('p.notice.small', '이 파일을 아바타로 읽지 못해서 기본 아바타를 쓰고 있어요. 다른 VRM 파일을 골라 보세요.') : null,
+      h('div.row',
+        h('button.btn.small', { type: 'button', onclick: () => input.click() }, mine ? '다른 VRM 파일로 바꾸기' : 'VRM 파일 불러오기'),
+        mine ? h('button.btn.small.ghost', {
+          type: 'button',
+          onclick: async () => {
+            await clearCustomAvatar().catch(() => {});
+            toast('기본 아바타로 되돌렸어요.');
+            setTimeout(() => location.reload(), 500);
+          },
+        }, '기본 아바타로 되돌리기') : null,
+      ),
+      input,
+    ),
+  );
+}
+
+function build(root, c, redraw, mine) {
   const s = getState();
   const lessonsDone = Object.keys(s.lessons).length;
   const learned = Object.keys(s.words).length;
@@ -97,6 +138,7 @@ function build(root, c, redraw) {
             onclick: () => { setSetting('avatar', k); refreshViewerAvatar(); redraw(); },
           }, label);
         }))),
+      avatarFileRow(mine),
       toggle('효과음 끄기', 'muted'),
       toggle('뷰어를 처음부터 거울 모드로', 'mirrorDefault'),
     ),
