@@ -206,7 +206,72 @@ export function importJSON(text) {
   save();
 }
 
-export function resetProgress() {
+// keepSettings: 화면 설정(테마·아바타 등)은 남기고 학습 기록만 지운다 (로그아웃할 때)
+export function resetProgress({ keepSettings = false } = {}) {
+  const settings = keepSettings && state ? state.settings : null;
   state = emptyState();
+  if (settings) state.settings = settings;
   save();
+}
+
+// ---------- 계정 동기화용 ----------
+
+// 지금 기록을 통째로 바꾼다 (계정에서 불러온 기록)
+export function replaceState(data) {
+  state = migrate(data);
+  rollDaily();
+  save();
+}
+
+const later = (x, y) => ((x || '') >= (y || '') ? x : y);
+
+// 두 기록 합치기 (이 기기의 기록 a + 계정에 저장된 기록 b). 어느 쪽에서 한 공부도 잃지 않게 합친다.
+export function mergeProgress(a, b) {
+  a = migrate(a);
+  b = migrate(b);
+  const out = emptyState();
+  // 날짜별 XP: 큰 쪽 (같은 기록이 양쪽에 있을 수 있어 더하지 않는다)
+  for (const d of new Set([...Object.keys(a.history), ...Object.keys(b.history)])) {
+    out.history[d] = Math.max(a.history[d] || 0, b.history[d] || 0);
+  }
+  const histSum = Object.values(out.history).reduce((x, y) => x + y, 0);
+  out.xp = Math.max(a.xp, b.xp, histSum);
+  // 단어 카드: 더 많이 풀어 본 쪽, 같으면 다음 복습일이 늦은 쪽
+  const tries = (c) => (c?.correct || 0) + (c?.wrong || 0);
+  for (const w of new Set([...Object.keys(a.words), ...Object.keys(b.words)])) {
+    const x = a.words[w], y = b.words[w];
+    out.words[w] = !x ? y : !y ? x
+      : tries(x) !== tries(y) ? (tries(x) > tries(y) ? x : y)
+      : ((x.due || '') >= (y.due || '') ? x : y);
+  }
+  // 레슨: 별·횟수는 큰 쪽, 완벽은 어느 한쪽이라도
+  for (const id of new Set([...Object.keys(a.lessons), ...Object.keys(b.lessons)])) {
+    const x = a.lessons[id] || {}, y = b.lessons[id] || {};
+    out.lessons[id] = {
+      stars: Math.max(x.stars || 0, y.stars || 0),
+      perfect: !!(x.perfect || y.perfect),
+      completedAt: later(x.completedAt, y.completedAt),
+      count: Math.max(x.count || 0, y.count || 0),
+    };
+  }
+  // 연속 학습일: 마지막 학습일이 늦은 쪽 (같으면 큰 쪽)
+  const sa = a.streak, sb = b.streak;
+  const st = (sa.lastDate || '') === (sb.lastDate || '') ? (sa.count >= sb.count ? sa : sb)
+    : ((sa.lastDate || '') > (sb.lastDate || '') ? sa : sb);
+  out.streak = { ...st, best: Math.max(sa.best || 0, sb.best || 0, st.count || 0) };
+  // 오늘 기록: 같은 날이면 큰 쪽, 아니면 최근 날짜
+  if (a.daily.date === b.daily.date) {
+    out.daily = { date: a.daily.date };
+    for (const k of ['newWords', 'reviews', 'lessons', 'xp']) out.daily[k] = Math.max(a.daily[k] || 0, b.daily[k] || 0);
+  } else {
+    out.daily = { ...(a.daily.date > b.daily.date ? a.daily : b.daily) };
+  }
+  out.goal = b.goal || a.goal;
+  out.settings = { ...b.settings }; // 화면 설정은 계정에 저장된 것으로
+  return out;
+}
+
+// 기록이 비어 있는지 (한 번도 공부하지 않음)
+export function isEmptyProgress(s) {
+  return !s.xp && !Object.keys(s.words).length && !Object.keys(s.lessons).length;
 }

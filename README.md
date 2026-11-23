@@ -19,9 +19,16 @@ python -m http.server 8770
 | 홈 · 학습 경로 · 레슨 · 복습 | `#/`, `#/learn`, `#/lesson/:id`, `#/review` |
 | 사전 · 단어 상세 | `#/dict`, `#/word/:word` |
 | 문장 → 수어 | `#/sentence?q=문장` |
-| 내 정보 (통계·설정·진도 내보내기) | `#/profile` |
+| 내 정보 (계정·통계·설정·진도 내보내기) | `#/profile` |
 | 동작 데이터 제작 도구 | `recorder.html` |
 | 문장 분석 테스트 | `tests/tokenizer.test.html` |
+
+## 계정 (구글 로그인)
+
+- 내 정보 → 계정에서 구글로 로그인하면 학습 기록(XP·연속 학습일·배운 단어·레슨·설정)이 계정에 저장돼 다른 기기에서도 이어집니다. 로그인하지 않으면 지금처럼 그 브라우저에만 저장됩니다.
+- Firebase(Authentication + Firestore)를 씁니다. 켜는 법: **`docs/firebase-설정.md`** → 받은 값을 `js/firebase-config.js`에 넣기. 값이 `null`이면 로그인 기능은 꺼져 있습니다.
+- 보안 규칙: `firestore.rules` (본인 기록 `users/{uid}` 하나만 읽고 쓰기). 코드: `js/account.js`, 기록 합치기: `js/learn/progress.js`의 `mergeProgress`.
+- 로그인하면 이 기기의 기록과 계정의 기록을 합치고, 로그아웃하면 이 기기의 학습 기록을 지웁니다(설정은 남김).
 
 ## 아바타
 

@@ -1,6 +1,7 @@
 // 진입점: 해시 라우터
 import { clear, errorView, loadingView, applyTheme } from './ui.js';
 import { getState, onChange, currentStreak, storageOK } from './learn/progress.js';
+import { initAccount, onAccountChange, accountInfo } from './account.js';
 
 const routes = [
   { pattern: /^\/?$/, nav: 'home', load: () => import('./pages/home.js') },
@@ -85,8 +86,46 @@ function updateHeader() {
   document.getElementById('storage-warning').hidden = storageOK;
 }
 
+// 머리글의 계정 표시: 로그인 전 "로그인", 로그인 후 프로필 사진(없으면 이름 첫 글자)
+function updateAccountChip() {
+  const el = document.getElementById('hdr-account');
+  const a = accountInfo();
+  el.hidden = !a.enabled;
+  if (!a.enabled) return;
+  el.replaceChildren();
+  el.classList.toggle('signed-in', !!a.user);
+  if (a.user) {
+    const label = `${a.user.name || a.user.email} 계정${a.status === 'error' ? ' (저장 오류)' : ''}`;
+    el.title = label;
+    el.setAttribute('aria-label', label);
+    if (a.user.photo) {
+      const img = document.createElement('img');
+      img.src = a.user.photo;
+      img.alt = '';
+      img.referrerPolicy = 'no-referrer';
+      img.onerror = () => { img.replaceWith((a.user.name || a.user.email || '?').slice(0, 1)); };
+      el.append(img);
+    } else {
+      el.append((a.user.name || a.user.email || '?').slice(0, 1));
+    }
+    el.classList.toggle('error', a.status === 'error');
+  } else {
+    el.title = '로그인하면 학습 기록이 계정에 저장돼요';
+    el.removeAttribute('aria-label');
+    el.classList.remove('error');
+    el.textContent = a.status === 'loading' ? '…' : '로그인';
+  }
+}
+
 applyTheme();
 updateHeader();
+updateAccountChip();
 onChange(() => { updateHeader(); });
+onAccountChange(updateAccountChip);
+// 로그인해서 계정의 기록을 합쳤으면 지금 화면을 새 기록으로 다시 그린다 (레슨·복습 중에는 방해하지 않음)
+window.addEventListener('signdict:synced', () => {
+  if (!document.body.classList.contains('immersive')) route();
+});
 window.addEventListener('hashchange', route);
 route();
+initAccount();

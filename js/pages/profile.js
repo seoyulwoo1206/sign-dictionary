@@ -4,6 +4,7 @@ import { loadCurriculum } from '../data.js';
 import {
   getState, currentStreak, GOALS, setGoal, setSetting, exportJSON, importJSON, resetProgress, storageOK,
 } from '../learn/progress.js';
+import { accountInfo, onAccountChange, signIn, signOut } from '../account.js';
 import { dateKey, addDays } from '../learn/srs.js';
 import { refreshViewerAvatar } from '../viewer/viewer.js';
 import { getCustomAvatar, saveCustomAvatar, clearCustomAvatar } from '../viewer/avatar-store.js';
@@ -16,7 +17,101 @@ export async function render(root, ctx) {
     build(root, c, draw, mine);
   };
   draw();
-  void ctx;
+  // 로그인·로그아웃하거나 오류가 나면 다시 그린다 (스크롤 위치는 그대로)
+  let pending = false;
+  const redraw = () => {
+    if (pending) return;
+    pending = true;
+    setTimeout(() => {
+      pending = false;
+      if (!ctx.isCurrent()) return;
+      const y = window.scrollY;
+      draw();
+      window.scrollTo(0, y);
+    }, 0);
+  };
+  let lastKey = '';
+  const offAccount = onAccountChange((a) => {
+    // 저장 중/저장됨 사이를 오갈 때마다 화면 전체를 다시 그리지 않고 상태 글자만 바꾼다
+    const key = `${a.user?.email}|${a.status === 'error'}|${a.status === 'loading'}|${a.status === 'signed-out'}`;
+    if (key !== lastKey) { lastKey = key; redraw(); } else updateSyncText(root, a);
+  });
+  ctx.onCleanup(offAccount);
+  // (계정의 기록을 불러와 기록이 바뀌면 main.js 가 화면을 통째로 다시 그린다)
+}
+
+const GOOGLE_ICON = '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.7 1.2 9.2 3.6l6.9-6.9C35.9 2.4 30.4 0 24 0 14.6 0 6.6 5.4 2.6 13.3l8 6.2C12.5 13.7 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.5 28.5c-.5-1.4-.8-2.9-.8-4.5s.3-3.1.8-4.5l-8-6.2C.9 16.6 0 20.2 0 24s.9 7.4 2.6 10.7l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.7-6c-2.2 1.5-5 2.3-8.2 2.3-6.2 0-11.5-4.2-13.4-9.9l-8 6.2C6.6 42.6 14.6 48 24 48z"/></svg>';
+
+function syncText(a) {
+  if (a.status === 'syncing') return '저장하는 중…';
+  if (a.status === 'error') return '';
+  if (a.lastSaved) {
+    const t = a.lastSaved;
+    return `학습 기록이 계정에 저장돼요 · 마지막 저장 ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
+  }
+  return '학습 기록이 계정에 저장돼요';
+}
+
+function updateSyncText(root, a) {
+  const el = root.querySelector('.account-sync');
+  if (el) el.textContent = syncText(a);
+}
+
+// 계정 카드: 구글 로그인 / 로그인한 사람 / 로그아웃
+function accountCard() {
+  const a = accountInfo();
+  if (!a.enabled) return null;
+  const err = a.status === 'error' && a.error ? h('p.notice.small', a.error) : null;
+  if (a.status === 'loading') {
+    return h('section.card.account-card', h('h2', '계정'), h('p.muted.small', '로그인 상태를 확인하는 중…'), err);
+  }
+  if (!a.user) {
+    const btn = h('button.btn.google', { type: 'button', html: GOOGLE_ICON + '<span>구글 계정으로 로그인</span>' });
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try { await signIn(); } catch { /* 오류는 카드에 보여 줌 */ }
+      btn.disabled = false;
+    });
+    return h('section.card.account-card',
+      h('h2', '계정'),
+      h('p.small', '로그인하면 학습 기록(XP, 연속 학습일, 배운 단어, 레슨)이 내 계정에 저장돼요. 다른 기기에서 로그인해도 이어서 공부할 수 있어요.'),
+      h('p.muted.small', '이 기기에서 로그인 전에 한 공부도 계정 기록에 합쳐져요.'),
+      err,
+      h('div.row', btn),
+    );
+  }
+  const u = a.user;
+  const photo = h('span.account-photo', { 'aria-hidden': 'true' });
+  if (u.photo) {
+    const img = h('img', { src: u.photo, alt: '', referrerpolicy: 'no-referrer' });
+    img.addEventListener('error', () => img.replaceWith((u.name || u.email || '?').slice(0, 1)));
+    photo.append(img);
+  } else {
+    photo.append((u.name || u.email || '?').slice(0, 1));
+  }
+  const out = h('button.btn.ghost', { type: 'button' }, '로그아웃');
+  out.addEventListener('click', async () => {
+    if (!confirm('로그아웃할까요? 기록은 계정에 저장돼 있고, 이 기기에서는 지워져요.')) return;
+    out.disabled = true;
+    try {
+      await signOut();
+      applyTheme();
+      toast('로그아웃했어요.');
+    } catch (e) {
+      toast('로그아웃하지 못했어요: ' + (e.message || e));
+      out.disabled = false;
+    }
+  });
+  return h('section.card.account-card',
+    h('h2', '계정'),
+    h('div.account-row',
+      photo,
+      h('div.account-who', h('b', u.name || '이름 없음'), h('span.small.muted', u.email)),
+      out,
+    ),
+    h('p.small.muted.account-sync', syncText(a)),
+    err,
+  );
 }
 
 // 내 VRM 아바타 불러오기 / 되돌리기 (파일은 이 브라우저에만 보관)
@@ -114,6 +209,7 @@ function build(root, c, redraw, mine) {
 
   root.append(h('div.stack',
     h('div.page-head', h('h1', '내 정보'), h('p', '학습 기록과 설정을 한곳에서 확인해요.')),
+    accountCard(),
     h('section.stats', { 'aria-label': '통계' },
       h('div.stat', h('b', `🔥 ${currentStreak()}`), h('span', `연속 학습일 (최고 ${s.streak.best || 0})`)),
       h('div.stat', h('b', `⭐ ${s.xp}`), h('span', '총 XP')),
@@ -145,7 +241,9 @@ function build(root, c, redraw, mine) {
 
     h('section.card',
       h('h2', '진도 저장'),
-      h('p.muted.small', '진도는 이 브라우저에만 저장돼요. 기기를 바꾸거나 캐시를 지우기 전에 파일로 내보내 두세요.'),
+      h('p.muted.small', accountInfo().user
+        ? '로그인돼 있어서 진도가 계정에 자동으로 저장돼요. 파일로도 따로 내보내 둘 수 있어요.'
+        : '진도는 이 브라우저에만 저장돼요. 기기를 바꾸거나 캐시를 지우기 전에 파일로 내보내 두세요.' + (accountInfo().enabled ? ' 로그인하면 계정에 자동으로 저장돼요.' : '')),
       !storageOK ? h('p.notice.small', '지금은 브라우저 저장소를 쓸 수 없어서 메모리에만 저장되고 있어요.') : null,
       h('div.file-actions',
         h('button.btn', {
