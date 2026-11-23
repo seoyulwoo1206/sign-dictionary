@@ -2,7 +2,8 @@
 // WebGL 컨텍스트는 페이지 전체에서 하나만 쓰고, 뷰어마다 화면 영역(scissor)을 나눠 그린다.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { Skeleton, Trail } from './skeleton.js';
+import { Skeleton } from './skeleton.js';
+import { Trail } from './trail.js';
 import { Player } from './player.js';
 import { loadAvatar, takePooledAvatar, avatarUnavailable } from './avatar.js';
 import { getState } from '../learn/progress.js';
@@ -460,6 +461,7 @@ export class SignViewer {
     this.player.update(dt);
     const f = this.player.currentFrame();
     if (f) this.skeleton.update(f, dt);
+    if (this.trailVisible && f) this.trail.update(f, this.player.time);
     if (this.handZoom && f) {
       const hand = this.currentHandPosition();
       if (hand) {
@@ -479,6 +481,7 @@ export class SignViewer {
       this.camera.aspect = aspect;
       this.camera.updateProjectionMatrix();
     }
+    if (this.trailVisible) this.trail.setResolution(this.el.clientWidth, this.el.clientHeight);
     renderer.render(this.scene, this.camera);
   }
 

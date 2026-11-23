@@ -133,7 +133,7 @@ export function createPlayerControls(viewer, { compact = false, keyboard = false
     });
     mirrorBtn = btn(ICON.mirror + '<span>거울</span>', '거울 모드 (좌우 반전)', 'toggle pc-text');
     handBtn = btn(ICON.hand + '<span>손 확대</span>', '손 확대 모드', 'toggle pc-text');
-    trailBtn = btn(ICON.trail + '<span>궤적</span>', '손목 궤적 표시', 'toggle pc-text');
+    trailBtn = btn(ICON.trail + '<span>궤적</span>', '손 궤적 표시', 'toggle pc-text');
     mirrorBtn.addEventListener('click', () => { viewer.setMirror(!viewer.mirror); sync(); });
     handBtn.addEventListener('click', () => { viewer.setHandZoom(!viewer.handZoom); sync(); });
     trailBtn.addEventListener('click', () => { viewer.setTrail(!viewer.trailVisible); sync(); });

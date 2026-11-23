@@ -11,8 +11,6 @@ export const COLORS = {
   lips: 0xc0605a,
   left: 0x3b82f6,   // 수어하는 사람의 왼손: 파랑
   right: 0xf97316,  // 수어하는 사람의 오른손: 주황
-  trailLeft: 0x60a5fa,
-  trailRight: 0xfb923c,
 };
 
 // 손바닥 안쪽 연결선은 손바닥 면으로 대신 그린다
@@ -396,31 +394,4 @@ function setPositions(geom, arr) {
     geom.setAttribute('position', new THREE.BufferAttribute(arr, 3));
   }
   geom.computeBoundingSphere();
-}
-
-// 손목 궤적 (전체 동작의 손목 경로를 선으로)
-export class Trail {
-  constructor() {
-    this.group = new THREE.Group();
-    this.lines = {
-      left: new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: COLORS.trailLeft, transparent: true, opacity: 0.85 })),
-      right: new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: COLORS.trailRight, transparent: true, opacity: 0.85 })),
-    };
-    this.group.add(this.lines.left, this.lines.right);
-  }
-
-  build(frames, mirror) {
-    for (const side of ['left', 'right']) {
-      const pts = [];
-      for (const f of frames) {
-        const w = f[side] ? f[side][0] : f.pose[side === 'left' ? 15 : 16];
-        if (w) pts.push(mirror ? -w[0] : w[0], w[1], w[2]);
-      }
-      setPositions(this.lines[side].geometry, new Float32Array(pts));
-    }
-  }
-
-  dispose() {
-    for (const l of Object.values(this.lines)) { l.geometry.dispose(); l.material.dispose(); }
-  }
 }
