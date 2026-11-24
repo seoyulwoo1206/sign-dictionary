@@ -4,7 +4,8 @@ import { loadCurriculum } from '../data.js';
 import {
   getState, currentStreak, GOALS, setGoal, setSetting, exportJSON, importJSON, resetProgress, storageOK,
 } from '../learn/progress.js';
-import { accountInfo, onAccountChange, signIn, signUp, signOut, MIN_PASSWORD } from '../account.js';
+import { accountInfo, onAccountChange, signIn, signUp, signOut, sendPasswordReset, MIN_PASSWORD } from '../account.js';
+import { passwordFields } from './password-fields.js';
 import { dateKey, addDays } from '../learn/srs.js';
 import { refreshViewerAvatar } from '../viewer/viewer.js';
 import { getCustomAvatar, saveCustomAvatar, clearCustomAvatar } from '../viewer/avatar-store.js';
@@ -56,42 +57,65 @@ function updateSyncText(root, a) {
   if (el) el.textContent = syncText(a);
 }
 
-// 계정 카드: 이메일+비밀번호로 로그인·가입 / 로그인한 사람 / 로그아웃
-let formMode = 'login'; // login | signup (다시 그려도 유지)
+// 계정 카드: 이메일+비밀번호로 로그인·가입·비밀번호 찾기 / 로그인한 사람 / 로그아웃
+let formMode = 'login'; // login | signup | forgot (다시 그려도 유지)
+let lastEmail = '';     // 모드를 바꿔도 적어 둔 이메일은 남긴다
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function switchMode(form, mode) {
+  formMode = mode;
+  form.closest('.account-card').replaceWith(accountCard());
+}
 
 function loginForm(err) {
-  const signup = formMode === 'signup';
-  const email = h('input', { type: 'email', name: 'email', autocomplete: 'email', required: true, placeholder: 'example@email.com' });
-  const pw = h('input', {
-    type: 'password', name: 'password', required: true, minlength: String(MIN_PASSWORD),
-    autocomplete: signup ? 'new-password' : 'current-password',
-    placeholder: signup ? `${MIN_PASSWORD}자 이상` : '',
-  });
+  const mode = formMode;
+  const signup = mode === 'signup';
+  const forgot = mode === 'forgot';
+  const email = h('input', { type: 'email', name: 'email', autocomplete: 'email', required: true, placeholder: 'example@email.com', value: lastEmail });
+  email.addEventListener('input', () => { lastEmail = email.value; });
+  // 가입: 비밀번호 + 비밀번호 확인 / 로그인: 비밀번호 하나 / 찾기: 없음
+  const pwSet = signup ? passwordFields() : null;
+  const pw = mode === 'login' ? h('input', { type: 'password', name: 'password', required: true, autocomplete: 'current-password' }) : null;
   const name = signup ? h('input', { type: 'text', name: 'name', autocomplete: 'nickname', maxlength: '40', placeholder: '선택' }) : null;
   const msg = h('p.notice.small', { role: 'alert', hidden: !err }, err || '');
-  const submit = h('button.btn.primary', { type: 'submit' }, signup ? '가입하고 시작하기' : '로그인');
+  const done = h('p.small.account-done', { role: 'status', hidden: true });
+  const submit = h('button.btn.primary', { type: 'submit' }, signup ? '가입하고 시작하기' : forgot ? '재설정 메일 보내기' : '로그인');
+  const link = (label, to) => h('button.btn.ghost', { type: 'button', onclick: () => switchMode(form, to) }, label);
   const form = h('form.account-form', { novalidate: true },
+    forgot ? h('p.small', '가입할 때 쓴 이메일을 적으면, 새 비밀번호를 정하는 링크를 메일로 보내 드려요. 링크는 1시간 동안 쓸 수 있어요.') : null,
     h('label.field', h('span', '이메일'), email),
-    h('label.field', h('span', '비밀번호'), pw),
+    pw ? h('label.field', h('span', '비밀번호'), pw) : null,
+    pwSet ? pwSet.fields : null,
     signup ? h('label.field', h('span', '이름 (화면에 보일 이름)'), name) : null,
     msg,
+    done,
     h('div.row', submit,
-      h('button.btn.ghost', {
-        type: 'button',
-        onclick: () => { formMode = signup ? 'login' : 'signup'; form.closest('.account-card').replaceWith(accountCard()); },
-      }, signup ? '이미 계정이 있어요' : '처음이에요 (가입하기)')),
+      signup ? link('이미 계정이 있어요', 'login')
+        : forgot ? link('로그인으로 돌아가기', 'login')
+          : link('처음이에요 (가입하기)', 'signup')),
+    mode === 'login' ? h('div.row', link('비밀번호를 잊었어요', 'forgot')) : null,
   );
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const show = (t) => { msg.textContent = t; msg.hidden = false; };
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim())) return show('이메일 주소를 확인해 주세요.');
-    if (pw.value.length < MIN_PASSWORD) return show(`비밀번호는 ${MIN_PASSWORD}자 이상이어야 해요.`);
+    const show = (t) => { msg.textContent = t; msg.hidden = false; done.hidden = true; };
+    if (!EMAIL_RE.test(email.value.trim())) return show('이메일 주소를 확인해 주세요.');
+    if (pw && !pw.value) return show('비밀번호를 적어 주세요.');
+    if (pwSet) { const bad = pwSet.check(); if (bad) return show(bad); }
     submit.disabled = true;
     msg.hidden = true;
     try {
-      if (signup) await signUp(email.value, pw.value, name.value);
+      if (forgot) {
+        await sendPasswordReset(email.value);
+        done.textContent = `${email.value.trim()} 으로 가입돼 있다면 재설정 메일을 보냈어요. 메일함(스팸함도)을 확인하고 링크를 눌러 주세요.`;
+        done.hidden = false;
+        submit.disabled = false;
+        return;
+      }
+      if (signup) await signUp(email.value, pwSet.value(), name.value);
       else await signIn(email.value, pw.value);
       formMode = 'login';
+      lastEmail = '';
       toast(signup ? '가입했어요! 이제 기록이 계정에 저장돼요.' : '로그인했어요.', { type: 'good' });
     } catch (err) {
       show(err.message || '로그인하지 못했어요.');
@@ -111,9 +135,9 @@ function accountCard() {
   }
   if (!a.user) {
     return h('section.card.account-card',
-      h('h2', formMode === 'signup' ? '계정 만들기' : '계정'),
+      h('h2', formMode === 'signup' ? '계정 만들기' : formMode === 'forgot' ? '비밀번호 찾기' : '계정'),
       h('p.small', '로그인하면 학습 기록(XP, 연속 학습일, 배운 단어, 레슨)이 내 계정에 저장돼요. 다른 기기에서 로그인해도 이어서 공부할 수 있어요.'),
-      h('p.muted.small', '이 기기에서 로그인 전에 한 공부도 계정 기록에 합쳐져요. 비밀번호는 잊어버리면 찾을 수 없으니 꼭 기억해 두세요.'),
+      h('p.muted.small', '이 기기에서 로그인 전에 한 공부도 계정 기록에 합쳐져요.'),
       loginForm(a.status === 'error' ? a.error : ''),
     );
   }

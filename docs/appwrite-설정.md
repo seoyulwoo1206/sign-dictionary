@@ -22,7 +22,7 @@
 ## 로그인 방법 — Auth → Settings
 
 - **Email/Password** 켜짐 (가입하면 바로 로그인, 이메일 확인 없음)
-- 비밀번호는 8자 이상
+- 비밀번호는 8자 이상, 가입할 때 "비밀번호 확인" 칸에 한 번 더 적어야 함
 
 ## 기록 저장소 — Databases
 
@@ -38,6 +38,6 @@
 ## 알아 두기
 
 - 가입한 사람 목록: Auth → Users. 기록: Databases → signdict → progress → Rows.
-- 비밀번호 찾기 기능은 아직 없습니다 (잊으면 Auth → Users에서 그 사용자를 지우고 다시 가입).
+- 비밀번호 찾기: 내 정보 → "비밀번호를 잊었어요" → Appwrite가 재설정 메일(한국어)을 보내고, 메일 링크(`사이트주소/?userId=…&secret=…`)를 누르면 `#/reset-password` 화면에서 새 비밀번호를 정합니다. 링크는 1시간 동안 유효하고, 위 "앱"에 등록된 주소에서만 동작합니다. 메일 문구는 Auth → Templates 에서 바꿀 수 있습니다.
 - 로그인하면 이 기기의 기록과 계정 기록을 합치고, 로그아웃하면 이 기기의 학습 기록을 지웁니다(설정은 남김).
 - 코드: `js/account.js` (로그인·저장), `js/learn/progress.js`의 `mergeProgress` (기록 합치기), `js/pages/profile.js` (계정 화면).

@@ -69,6 +69,8 @@ export function errorMessage(e) {
     if (/email/i.test(e.message)) return '이메일 주소 형식이 올바르지 않아요.';
     if (/password/i.test(e.message)) return `비밀번호는 ${MIN_PASSWORD}자 이상이어야 해요.`;
   }
+  if (type === 'user_invalid_token') return '재설정 링크가 만료됐거나 이미 사용했어요. 비밀번호 찾기를 다시 해 주세요.';
+  if (type === 'project_invalid_host' || (type === 'general_argument_invalid' && /url/i.test(e.message))) return '이 주소에서는 비밀번호 재설정을 쓸 수 없어요.';
   if (type === 'user_unauthorized' || e?.code === 401) return '로그인이 풀렸어요. 다시 로그인해 주세요.';
   if (e?.code === 403) return '계정 저장소에 접근할 수 없어요. (Appwrite 권한 설정 확인 필요)';
   if (e instanceof TypeError || /fetch|network/i.test(e?.message || '')) return '인터넷 연결을 확인해 주세요.';
@@ -78,7 +80,8 @@ export function errorMessage(e) {
 async function load() {
   if (aw) return aw;
   const sdk = await import(SDK);
-  const client = new sdk.Client().setEndpoint(CFG.endpoint).setProject(CFG.projectId);
+  // setLocale('ko'): Appwrite 가 보내는 메일(비밀번호 재설정 등)을 한국어로
+  const client = new sdk.Client().setEndpoint(CFG.endpoint).setProject(CFG.projectId).setLocale('ko');
   aw = { sdk, account: new sdk.Account(client), tables: new sdk.TablesDB(client) };
   return aw;
 }
@@ -224,4 +227,31 @@ export async function signOut() {
   rowExists = false;
   resetProgress({ keepSettings: true });
   setStatus('signed-out');
+}
+
+// ---------- 비밀번호 찾기 ----------
+
+// 비밀번호 재설정 메일을 보낸다. 메일의 링크를 누르면 이 사이트의 #/reset-password 화면이 열린다.
+// 가입되지 않은 이메일이어도 같은 결과를 돌려준다 (누가 가입했는지 알아낼 수 없게).
+export async function sendPasswordReset(email) {
+  await load();
+  // 링크 주소: 해시(#) 없이 지금 페이지 주소 — Appwrite 가 ?userId=…&secret=… 를 붙여 준다
+  const url = location.origin + location.pathname;
+  try {
+    await aw.account.createRecovery({ email: email.trim(), url });
+  } catch (e) {
+    if (e?.code === 404 || e?.type === 'user_not_found') return; // 가입 안 된 이메일
+    throw new Error(errorMessage(e));
+  }
+}
+
+// 메일 링크로 들어온 사람의 새 비밀번호 저장
+export async function resetPassword(userId, secret, password) {
+  await load();
+  try {
+    await aw.account.updateRecovery({ userId, secret, password });
+  } catch (e) {
+    if (e?.code === 404) throw new Error(errorMessage({ type: 'user_invalid_token' }));
+    throw new Error(errorMessage(e));
+  }
 }

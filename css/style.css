@@ -237,6 +237,12 @@ noscript { display: block; margin: 24px 16px; padding: 16px; border-radius: var(
 }
 .account-form .field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
 .account-form .notice { margin: 0; }
+.account-form .pw-hint { font-size: .82rem; font-weight: 500; min-height: 1.2em; }
+.account-form .pw-hint.ok { color: var(--good, #16a34a); }
+.account-form .pw-hint.bad { color: var(--bad, #dc2626); }
+.account-form .pw-show { display: inline-flex; align-items: center; gap: 8px; font-size: .86rem; color: var(--muted); cursor: pointer; justify-self: start; }
+.account-form .pw-show input { width: 16px; height: 16px; accent-color: var(--accent); }
+.account-form .account-done { margin: 0; padding: 10px 12px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 
 .app-nav {
   position: fixed;

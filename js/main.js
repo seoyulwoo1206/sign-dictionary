@@ -12,6 +12,7 @@ const routes = [
   { pattern: /^\/word\/([^/]+)$/, nav: 'dict', load: () => import('./pages/word.js'), keys: ['word'] },
   { pattern: /^\/sentence$/, nav: 'sentence', load: () => import('./sentence/sentence-page.js') },
   { pattern: /^\/profile$/, nav: 'profile', load: () => import('./pages/profile.js') },
+  { pattern: /^\/reset-password$/, nav: 'profile', load: () => import('./pages/reset-password.js') },
 ];
 
 const main = document.getElementById('main');
@@ -117,6 +118,13 @@ onAccountChange(updateAccountChip);
 window.addEventListener('signdict:synced', () => {
   if (!document.body.classList.contains('immersive')) route();
 });
+// 비밀번호 재설정 메일의 링크(?userId=…&secret=…)로 들어오면 재설정 화면으로
+{
+  const q = new URLSearchParams(location.search);
+  if (q.has('userId') && q.has('secret') && !location.hash.startsWith('#/reset-password')) {
+    history.replaceState(null, '', location.pathname + location.search + '#/reset-password');
+  }
+}
 window.addEventListener('hashchange', route);
 route();
 initAccount();
