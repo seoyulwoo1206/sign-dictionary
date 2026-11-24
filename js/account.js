@@ -1,30 +1,33 @@
-// 계정: 구글 로그인(Firebase) + 학습 기록을 계정에 저장
+// 계정: 이메일+비밀번호 로그인(Appwrite) + 학습 기록을 계정에 저장
 //
 //  - 로그인하면 이 기기의 기록과 계정에 저장된 기록을 합친다 (어느 쪽에서 한 공부도 잃지 않게).
 //  - 그 뒤로 기록이 바뀔 때마다 잠시 기다렸다가 계정에 저장한다.
 //  - 다른 기기에서 공부하고 돌아오면(이 탭을 다시 볼 때) 계정의 기록을 다시 합친다.
 //  - 로그아웃하면 이 기기의 학습 기록을 지운다 (같은 기기를 쓰는 다음 사람에게 보이지 않게). 화면 설정은 남긴다.
 //
-// 저장 위치: Firestore  users/{로그인한 사람의 uid}  { progressJson, updatedAt, app }
-// 보안 규칙: firestore.rules (본인 문서만 읽고 쓸 수 있음)
-// Firebase 라이브러리는 설정이 있을 때만 불러온다 (설정이 없으면 로그인 기능이 꺼짐).
-import { firebaseConfig } from './firebase-config.js';
+// 저장 위치: Appwrite TablesDB  signdict / progress  의 행 하나 (행 ID = 사용자 ID, 열 progressJson)
+// 권한: 표는 "로그인한 사용자: 만들기"만, 행은 만든 사람만 읽기·고치기·지우기 (행 단위 보안 켬)
+// Appwrite 라이브러리는 설정이 있을 때만 불러온다.
+import { appwriteConfig as CFG } from './appwrite-config.js';
 import { getState, onChange, replaceState, mergeProgress, resetProgress } from './learn/progress.js';
 
-const SDK = 'https://www.gstatic.com/firebasejs/11.0.2';
+const SDK = 'https://cdn.jsdelivr.net/npm/appwrite@29.2.0/+esm';
 const SAVE_DELAY = 1500; // ms: 기록이 바뀐 뒤 이만큼 조용하면 저장
+export const MIN_PASSWORD = 8;
 
-export const accountEnabled = !!(firebaseConfig && firebaseConfig.apiKey);
+export const accountEnabled = !!(CFG && CFG.projectId);
 
-let fb = null;        // { A: auth 모듈, F: firestore 모듈, auth, db }
+let aw = null;        // { sdk, account, tables }
 let user = null;
 let status = accountEnabled ? 'loading' : 'off'; // off | loading | signed-out | syncing | saved | error
 let errorText = '';
 let lastSaved = null;
 let lastUploaded = '';
+let rowExists = false;
 let pulling = false;
 let timer = null;
 let uploading = null;
+let started = false;
 const listeners = new Set();
 
 export function onAccountChange(fn) {
@@ -43,7 +46,7 @@ export function accountInfo() {
     status,
     error: errorText,
     lastSaved,
-    user: user ? { name: user.displayName || '', email: user.email || '', photo: user.photoURL || '' } : null,
+    user: user ? { name: user.name || '', email: user.email || '' } : null,
   };
 }
 
@@ -53,28 +56,34 @@ function setStatus(s, err = '') {
   emit();
 }
 
-function message(e) {
-  const code = e?.code || '';
-  if (code === 'auth/unauthorized-domain') return '이 사이트 주소가 Firebase에 등록되지 않았어요. (설정 안내의 "승인된 도메인" 단계)';
-  if (code === 'auth/network-request-failed' || code === 'unavailable') return '인터넷 연결을 확인해 주세요.';
-  if (code === 'permission-denied') return '계정 저장소에 접근할 수 없어요. (설정 안내의 "보안 규칙" 단계)';
-  if (code === 'auth/operation-not-allowed') return 'Firebase에서 구글 로그인이 켜져 있지 않아요. (설정 안내의 "로그인 방법" 단계)';
+// Appwrite 오류 → 알아듣기 쉬운 말
+export function errorMessage(e) {
+  const type = e?.type || '';
+  if (type === 'user_invalid_credentials') return '이메일이나 비밀번호가 맞지 않아요.';
+  if (type === 'user_already_exists') return '이미 가입된 이메일이에요. 로그인해 주세요.';
+  if (type === 'user_password_mismatch' || type === 'password_recently_used') return '비밀번호를 다시 확인해 주세요.';
+  if (type === 'password_personal_data') return '비밀번호에 이름이나 이메일을 넣지 말아 주세요.';
+  if (type === 'user_blocked') return '이 계정은 사용할 수 없게 막혀 있어요.';
+  if (type === 'general_rate_limit_exceeded' || e?.code === 429) return '너무 여러 번 시도했어요. 잠시 뒤에 다시 해 주세요.';
+  if (type === 'general_argument_invalid') {
+    if (/email/i.test(e.message)) return '이메일 주소 형식이 올바르지 않아요.';
+    if (/password/i.test(e.message)) return `비밀번호는 ${MIN_PASSWORD}자 이상이어야 해요.`;
+  }
+  if (type === 'user_unauthorized' || e?.code === 401) return '로그인이 풀렸어요. 다시 로그인해 주세요.';
+  if (e?.code === 403) return '계정 저장소에 접근할 수 없어요. (Appwrite 권한 설정 확인 필요)';
+  if (e instanceof TypeError || /fetch|network/i.test(e?.message || '')) return '인터넷 연결을 확인해 주세요.';
   return e?.message || '알 수 없는 오류가 났어요.';
 }
 
 async function load() {
-  if (fb) return fb;
-  const [app, A, F] = await Promise.all([
-    import(`${SDK}/firebase-app.js`),
-    import(`${SDK}/firebase-auth.js`),
-    import(`${SDK}/firebase-firestore.js`),
-  ]);
-  const a = app.initializeApp(firebaseConfig);
-  fb = { A, F, auth: A.getAuth(a), db: F.getFirestore(a) };
-  return fb;
+  if (aw) return aw;
+  const sdk = await import(SDK);
+  const client = new sdk.Client().setEndpoint(CFG.endpoint).setProject(CFG.projectId);
+  aw = { sdk, account: new sdk.Account(client), tables: new sdk.TablesDB(client) };
+  return aw;
 }
 
-const docRef = () => fb.F.doc(fb.db, 'users', user.uid);
+const rowRef = () => ({ databaseId: CFG.databaseId, tableId: CFG.tableId, rowId: user.$id });
 
 // 계정의 기록을 가져와 이 기기의 기록과 합친다
 async function pull() {
@@ -83,12 +92,16 @@ async function pull() {
   setStatus('syncing');
   try {
     const before = JSON.stringify(getState());
-    const snap = await fb.F.getDoc(docRef());
     let merged = getState();
-    if (snap.exists()) {
-      const text = snap.data().progressJson;
-      lastUploaded = text || '';
-      if (text) merged = mergeProgress(getState(), JSON.parse(text));
+    try {
+      const row = await aw.tables.getRow(rowRef());
+      rowExists = true;
+      lastUploaded = row.progressJson || '';
+      if (row.progressJson) merged = mergeProgress(getState(), JSON.parse(row.progressJson));
+    } catch (e) {
+      if (e?.code !== 404) throw e;
+      rowExists = false; // 아직 저장한 적 없음
+      lastUploaded = '';
     }
     pulling = false;
     replaceState(merged); // 바뀌었으면 onChange → 저장 예약
@@ -97,7 +110,7 @@ async function pull() {
   } catch (e) {
     pulling = false;
     console.error(e);
-    setStatus('error', message(e));
+    setStatus('error', errorMessage(e));
   }
 }
 
@@ -113,15 +126,26 @@ async function upload() {
   const text = JSON.stringify(getState());
   if (text === lastUploaded) { lastSaved = lastSaved || new Date(); setStatus('saved'); return; }
   setStatus('syncing');
-  uploading = fb.F.setDoc(docRef(), { progressJson: text, updatedAt: fb.F.serverTimestamp(), app: 'signdict' });
+  const { Permission, Role } = aw.sdk;
+  const mine = Role.user(user.$id);
+  uploading = rowExists
+    ? aw.tables.updateRow({ ...rowRef(), data: { progressJson: text } })
+    : aw.tables.createRow({
+      ...rowRef(),
+      data: { progressJson: text },
+      permissions: [Permission.read(mine), Permission.update(mine), Permission.delete(mine)],
+    });
   try {
     await uploading;
+    rowExists = true;
     lastUploaded = text;
     lastSaved = new Date();
     setStatus('saved');
   } catch (e) {
     console.error(e);
-    setStatus('error', message(e));
+    if (e?.code === 409) rowExists = true; // 다른 기기가 먼저 만들었으면 다음엔 고친다
+    if (e?.code === 404) rowExists = false;
+    setStatus('error', errorMessage(e));
   } finally {
     uploading = null;
   }
@@ -131,9 +155,18 @@ function flush() {
   if (timer) { clearTimeout(timer); timer = null; upload(); }
 }
 
+// 로그인된 사용자로 시작
+async function startSession(u) {
+  user = u;
+  lastUploaded = '';
+  rowExists = false;
+  await pull();
+}
+
 // 페이지를 열 때 한 번 부른다
 export async function initAccount() {
-  if (!accountEnabled) return;
+  if (!accountEnabled || started) return;
+  started = true;
   try {
     await load();
   } catch (e) {
@@ -141,48 +174,54 @@ export async function initAccount() {
     setStatus('error', '로그인 기능을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.');
     return;
   }
-  // 리디렉트 방식으로 로그인했다가 돌아온 경우의 오류 확인
-  fb.A.getRedirectResult(fb.auth).catch((e) => setStatus('error', message(e)));
-  fb.A.onAuthStateChanged(fb.auth, (u) => {
-    const changed = (u?.uid || null) !== (user?.uid || null);
-    user = u;
-    if (!u) { lastUploaded = ''; setStatus('signed-out'); return; }
-    if (changed) pull();
-  });
   onChange(scheduleUpload);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') flush();
     else if (user) pull();
   });
   window.addEventListener('pagehide', flush);
-}
-
-export async function signIn() {
-  await load();
-  const provider = new fb.A.GoogleAuthProvider();
-  provider.setCustomParameters({ prompt: 'select_account' });
   try {
-    await fb.A.signInWithPopup(fb.auth, provider);
+    await startSession(await aw.account.get());
   } catch (e) {
-    if (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request') return;
-    if (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment') {
-      await fb.A.signInWithRedirect(fb.auth, provider);
-      return;
-    }
-    setStatus('error', message(e));
-    throw e;
+    user = null;
+    if (e?.code === 401) setStatus('signed-out');
+    else setStatus('error', errorMessage(e));
   }
 }
 
+// 로그인 (실패하면 알아듣기 쉬운 말로 된 Error 를 던진다)
+export async function signIn(email, password) {
+  await load();
+  try {
+    await aw.account.createEmailPasswordSession({ email: email.trim(), password });
+  } catch (e) {
+    // 이미 로그인된 세션이 남아 있으면 그대로 쓴다
+    if (e?.type !== 'user_session_already_exists') throw new Error(errorMessage(e));
+  }
+  await startSession(await aw.account.get());
+}
+
+// 가입 후 바로 로그인
+export async function signUp(email, password, name = '') {
+  await load();
+  try {
+    await aw.account.create({ userId: aw.sdk.ID.unique(), email: email.trim(), password, name: name.trim() || undefined });
+  } catch (e) {
+    throw new Error(errorMessage(e));
+  }
+  await signIn(email, password);
+}
+
 export async function signOut() {
-  if (!fb || !user) return;
+  if (!aw || !user) return;
   clearTimeout(timer);
   timer = null;
   // 마지막 기록까지 저장하고 나간다 (인터넷이 끊겨 있으면 오래 기다리지 않는다)
   await Promise.race([upload(), new Promise((r) => setTimeout(r, 4000))]);
-  await fb.A.signOut(fb.auth);
+  try { await aw.account.deleteSession({ sessionId: 'current' }); } catch (e) { console.warn(e); }
   user = null;
   lastUploaded = '';
+  rowExists = false;
   resetProgress({ keepSettings: true });
   setStatus('signed-out');
 }

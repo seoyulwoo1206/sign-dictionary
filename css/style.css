@@ -215,8 +215,10 @@ noscript { display: block; margin: 24px 16px; padding: 16px; border-radius: var(
 
 .account-chip { text-decoration: none; color: var(--text); gap: 6px; }
 .account-chip:hover { border-color: var(--accent, var(--hero-from)); }
-.account-chip.signed-in { width: 32px; padding: 0; justify-content: center; overflow: hidden; }
-.account-chip.signed-in img { width: 100%; height: 100%; object-fit: cover; }
+.account-chip.signed-in {
+  width: 32px; padding: 0; justify-content: center; overflow: hidden;
+  background: linear-gradient(135deg, var(--hero-from), var(--hero-to)); color: #fff; border-color: transparent;
+}
 .account-chip.error { box-shadow: 0 0 0 2px #ef4444; }
 .account-card .account-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .account-card .account-photo {
@@ -224,12 +226,17 @@ noscript { display: block; margin: 24px 16px; padding: 16px; border-radius: var(
   display: inline-flex; align-items: center; justify-content: center;
   background: linear-gradient(135deg, var(--hero-from), var(--hero-to)); color: #fff; font-weight: 700; font-size: 1.1rem;
 }
-.account-card .account-photo img { width: 100%; height: 100%; object-fit: cover; }
 .account-card .account-who { flex: 1; min-width: 0; }
 .account-card .account-who b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .account-card .account-who span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.btn.google { display: inline-flex; align-items: center; gap: 8px; }
-.btn.google svg { width: 18px; height: 18px; }
+.account-form { display: grid; gap: 12px; max-width: 420px; margin-top: 4px; }
+.account-form .field { display: grid; gap: 5px; font-size: .9rem; font-weight: 600; }
+.account-form .field input {
+  font: inherit; font-weight: 400; padding: 10px 12px; min-height: 44px;
+  border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); color: var(--text);
+}
+.account-form .field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+.account-form .notice { margin: 0; }
 
 .app-nav {
   position: fixed;

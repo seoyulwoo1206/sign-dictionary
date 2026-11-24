@@ -86,7 +86,7 @@ function updateHeader() {
   document.getElementById('storage-warning').hidden = storageOK;
 }
 
-// 머리글의 계정 표시: 로그인 전 "로그인", 로그인 후 프로필 사진(없으면 이름 첫 글자)
+// 머리글의 계정 표시: 로그인 전 "로그인", 로그인 후 이름 첫 글자
 function updateAccountChip() {
   const el = document.getElementById('hdr-account');
   const a = accountInfo();
@@ -98,16 +98,7 @@ function updateAccountChip() {
     const label = `${a.user.name || a.user.email} 계정${a.status === 'error' ? ' (저장 오류)' : ''}`;
     el.title = label;
     el.setAttribute('aria-label', label);
-    if (a.user.photo) {
-      const img = document.createElement('img');
-      img.src = a.user.photo;
-      img.alt = '';
-      img.referrerPolicy = 'no-referrer';
-      img.onerror = () => { img.replaceWith((a.user.name || a.user.email || '?').slice(0, 1)); };
-      el.append(img);
-    } else {
-      el.append((a.user.name || a.user.email || '?').slice(0, 1));
-    }
+    el.append((a.user.name || a.user.email || '?').slice(0, 1).toUpperCase());
     el.classList.toggle('error', a.status === 'error');
   } else {
     el.title = '로그인하면 학습 기록이 계정에 저장돼요';

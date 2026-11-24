@@ -4,7 +4,7 @@ import { loadCurriculum } from '../data.js';
 import {
   getState, currentStreak, GOALS, setGoal, setSetting, exportJSON, importJSON, resetProgress, storageOK,
 } from '../learn/progress.js';
-import { accountInfo, onAccountChange, signIn, signOut } from '../account.js';
+import { accountInfo, onAccountChange, signIn, signUp, signOut, MIN_PASSWORD } from '../account.js';
 import { dateKey, addDays } from '../learn/srs.js';
 import { refreshViewerAvatar } from '../viewer/viewer.js';
 import { getCustomAvatar, saveCustomAvatar, clearCustomAvatar } from '../viewer/avatar-store.js';
@@ -40,7 +40,6 @@ export async function render(root, ctx) {
   // (계정의 기록을 불러와 기록이 바뀌면 main.js 가 화면을 통째로 다시 그린다)
 }
 
-const GOOGLE_ICON = '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.7 1.2 9.2 3.6l6.9-6.9C35.9 2.4 30.4 0 24 0 14.6 0 6.6 5.4 2.6 13.3l8 6.2C12.5 13.7 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.5 28.5c-.5-1.4-.8-2.9-.8-4.5s.3-3.1.8-4.5l-8-6.2C.9 16.6 0 20.2 0 24s.9 7.4 2.6 10.7l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.7-6c-2.2 1.5-5 2.3-8.2 2.3-6.2 0-11.5-4.2-13.4-9.9l-8 6.2C6.6 42.6 14.6 48 24 48z"/></svg>';
 
 function syncText(a) {
   if (a.status === 'syncing') return '저장하는 중…';
@@ -57,7 +56,52 @@ function updateSyncText(root, a) {
   if (el) el.textContent = syncText(a);
 }
 
-// 계정 카드: 구글 로그인 / 로그인한 사람 / 로그아웃
+// 계정 카드: 이메일+비밀번호로 로그인·가입 / 로그인한 사람 / 로그아웃
+let formMode = 'login'; // login | signup (다시 그려도 유지)
+
+function loginForm(err) {
+  const signup = formMode === 'signup';
+  const email = h('input', { type: 'email', name: 'email', autocomplete: 'email', required: true, placeholder: 'example@email.com' });
+  const pw = h('input', {
+    type: 'password', name: 'password', required: true, minlength: String(MIN_PASSWORD),
+    autocomplete: signup ? 'new-password' : 'current-password',
+    placeholder: signup ? `${MIN_PASSWORD}자 이상` : '',
+  });
+  const name = signup ? h('input', { type: 'text', name: 'name', autocomplete: 'nickname', maxlength: '40', placeholder: '선택' }) : null;
+  const msg = h('p.notice.small', { role: 'alert', hidden: !err }, err || '');
+  const submit = h('button.btn.primary', { type: 'submit' }, signup ? '가입하고 시작하기' : '로그인');
+  const form = h('form.account-form', { novalidate: true },
+    h('label.field', h('span', '이메일'), email),
+    h('label.field', h('span', '비밀번호'), pw),
+    signup ? h('label.field', h('span', '이름 (화면에 보일 이름)'), name) : null,
+    msg,
+    h('div.row', submit,
+      h('button.btn.ghost', {
+        type: 'button',
+        onclick: () => { formMode = signup ? 'login' : 'signup'; form.closest('.account-card').replaceWith(accountCard()); },
+      }, signup ? '이미 계정이 있어요' : '처음이에요 (가입하기)')),
+  );
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const show = (t) => { msg.textContent = t; msg.hidden = false; };
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim())) return show('이메일 주소를 확인해 주세요.');
+    if (pw.value.length < MIN_PASSWORD) return show(`비밀번호는 ${MIN_PASSWORD}자 이상이어야 해요.`);
+    submit.disabled = true;
+    msg.hidden = true;
+    try {
+      if (signup) await signUp(email.value, pw.value, name.value);
+      else await signIn(email.value, pw.value);
+      formMode = 'login';
+      toast(signup ? '가입했어요! 이제 기록이 계정에 저장돼요.' : '로그인했어요.', { type: 'good' });
+    } catch (err) {
+      show(err.message || '로그인하지 못했어요.');
+      submit.disabled = false;
+    }
+  });
+  setTimeout(() => { if (document.activeElement === document.body) email.focus({ preventScroll: true }); }, 0);
+  return form;
+}
+
 function accountCard() {
   const a = accountInfo();
   if (!a.enabled) return null;
@@ -66,29 +110,14 @@ function accountCard() {
     return h('section.card.account-card', h('h2', '계정'), h('p.muted.small', '로그인 상태를 확인하는 중…'), err);
   }
   if (!a.user) {
-    const btn = h('button.btn.google', { type: 'button', html: GOOGLE_ICON + '<span>구글 계정으로 로그인</span>' });
-    btn.addEventListener('click', async () => {
-      btn.disabled = true;
-      try { await signIn(); } catch { /* 오류는 카드에 보여 줌 */ }
-      btn.disabled = false;
-    });
     return h('section.card.account-card',
-      h('h2', '계정'),
+      h('h2', formMode === 'signup' ? '계정 만들기' : '계정'),
       h('p.small', '로그인하면 학습 기록(XP, 연속 학습일, 배운 단어, 레슨)이 내 계정에 저장돼요. 다른 기기에서 로그인해도 이어서 공부할 수 있어요.'),
-      h('p.muted.small', '이 기기에서 로그인 전에 한 공부도 계정 기록에 합쳐져요.'),
-      err,
-      h('div.row', btn),
+      h('p.muted.small', '이 기기에서 로그인 전에 한 공부도 계정 기록에 합쳐져요. 비밀번호는 잊어버리면 찾을 수 없으니 꼭 기억해 두세요.'),
+      loginForm(a.status === 'error' ? a.error : ''),
     );
   }
   const u = a.user;
-  const photo = h('span.account-photo', { 'aria-hidden': 'true' });
-  if (u.photo) {
-    const img = h('img', { src: u.photo, alt: '', referrerpolicy: 'no-referrer' });
-    img.addEventListener('error', () => img.replaceWith((u.name || u.email || '?').slice(0, 1)));
-    photo.append(img);
-  } else {
-    photo.append((u.name || u.email || '?').slice(0, 1));
-  }
   const out = h('button.btn.ghost', { type: 'button' }, '로그아웃');
   out.addEventListener('click', async () => {
     if (!confirm('로그아웃할까요? 기록은 계정에 저장돼 있고, 이 기기에서는 지워져요.')) return;
@@ -105,8 +134,8 @@ function accountCard() {
   return h('section.card.account-card',
     h('h2', '계정'),
     h('div.account-row',
-      photo,
-      h('div.account-who', h('b', u.name || '이름 없음'), h('span.small.muted', u.email)),
+      h('span.account-photo', { 'aria-hidden': 'true' }, (u.name || u.email || '?').slice(0, 1).toUpperCase()),
+      h('div.account-who', h('b', u.name || u.email.split('@')[0]), h('span.small.muted', u.email)),
       out,
     ),
     h('p.small.muted.account-sync', syncText(a)),
