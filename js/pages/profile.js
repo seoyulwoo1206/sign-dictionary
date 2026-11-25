@@ -7,6 +7,7 @@ import {
 import { accountInfo, onAccountChange, signIn, signUp, signOut, sendPasswordReset, MIN_PASSWORD } from '../account.js';
 import { passwordFields } from './password-fields.js';
 import { reminderCard } from './reminder-card.js';
+import { petCard } from './pet-card.js';
 import { dateKey, addDays } from '../learn/srs.js';
 import { refreshViewerAvatar } from '../viewer/viewer.js';
 import { getCustomAvatar, saveCustomAvatar, clearCustomAvatar } from '../viewer/avatar-store.js';
@@ -264,6 +265,7 @@ function build(root, c, redraw, mine) {
   root.append(h('div.stack',
     h('div.page-head', h('h1', '내 정보'), h('p', '학습 기록과 설정을 한곳에서 확인해요.')),
     accountCard(),
+    petCard(),
     h('section.stats', { 'aria-label': '통계' },
       h('div.stat', h('b', `🔥 ${currentStreak()}`), h('span', `연속 학습일 (최고 ${s.streak.best || 0})`)),
       h('div.stat', h('b', `⭐ ${s.xp}`), h('span', '총 XP')),

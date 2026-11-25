@@ -5,7 +5,7 @@ import { runExercise, answerBar, pickOptions } from '../learn/exercises.js';
 import { dueWords, recordReview, completeReviewSession, currentStreak, getState } from '../learn/progress.js';
 import { INTERVALS } from '../learn/srs.js';
 import { entrySignPaths, hasOwnSign } from '../sentence/clips.js';
-import { mascot } from '../mascot.js';
+import { mascot, resultMascot } from '../mascot.js';
 
 const MAX = 15;
 const TYPES = ['sign2word', 'type', 'word2sign'];
@@ -40,6 +40,7 @@ export async function render(root, ctx) {
   ctx.onCleanup(() => answer.el.remove());
 
   let correctFirst = 0;
+  const xpBefore = getState().xp;
   let done = 0;
   let total = queue.length;
   for (let i = 0; i < queue.length; i++) {
@@ -64,11 +65,13 @@ export async function render(root, ctx) {
   playSound('complete');
   answer.el.remove();
   const s = getState();
+  const pet = resultMascot(correctFirst === due.length ? 'cheer' : 'happy', xpBefore);
   clear(body).append(h('div.result.card.pop',
-    h('div.result-mascot', mascot(correctFirst === due.length ? 'cheer' : 'happy', { size: 140 })),
+    h('div.result-mascot', pet.el),
     h('h1', '복습 완료!'),
     h('p.xp-earned', `${correctFirst}/${due.length} 정답`),
     res.streakUp ? h('p', `🔥 스트릭 ${currentStreak()}일!`) : null,
+    pet.note,
     h('p.muted.small', `맞힌 단어는 다음 박스로 (간격 ${INTERVALS.join('→')}일), 틀린 단어는 내일 다시 나와요.`),
     h('ul.result-list',
       due.map((w) => h('li', `${w.word} — ${s.words[w.word]?.box || 1}번 박스, 다음 복습 ${s.words[w.word]?.due || ''}`))),

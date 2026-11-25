@@ -3,12 +3,12 @@ import { h, clear, shuffle, playSound, errorView } from '../ui.js';
 import { loadCurriculum, loadWords, preloadSigns } from '../data.js';
 import { createViewerBlock } from '../viewer/widget.js';
 import { runExercise, answerBar, makeScope, pickOptions } from './exercises.js';
-import { completeLesson, currentStreak } from './progress.js';
+import { completeLesson, currentStreak, getState } from './progress.js';
 import { isUnlocked, lessonAfter } from './path.js';
 import { gloss } from '../sentence/glosser.js';
 import { getGlossIndex, sentenceClip, tokenLabel, TYPE_LABELS, entryClip, entrySignPaths } from '../sentence/clips.js';
 import { jamoSignPath } from '../sentence/fingerspell.js';
-import { mascot } from '../mascot.js';
+import { mascot, resultMascot } from '../mascot.js';
 
 const WORD_TYPES = ['sign2word', 'word2sign', 'type'];
 
@@ -110,18 +110,21 @@ export async function render(root, ctx) {
 
   // ---------- 완료 ----------
   const perfect = mistakes === 0;
+  const xpBefore = getState().xp;
   const res = completeLesson(lesson.id, { perfect, words: lessonWords.map((w) => w.word) });
   playSound('complete');
   answer.el.remove();
   const next = lessonAfter(c, lesson.id);
+  const pet = resultMascot(perfect ? 'cheer' : 'happy', xpBefore);
   clear(body).append(
     h('div.result.card.pop',
-      h('div.result-mascot', mascot(perfect ? 'cheer' : 'happy', { size: 140 })),
+      h('div.result-mascot', pet.el),
       h('h1', '레슨 완료!'),
       h('p.xp-earned', `+${res.xp} XP`),
       perfect ? h('p', '실수 없이 끝냈어요! 수달이가 신났어요. 보너스 +5 XP') : h('p.muted', `틀린 문제 ${mistakes}개 — 복습에서 다시 만나요.`),
       res.streakUp ? h('p', `🔥 스트릭 ${currentStreak()}일!`) : null,
       res.newWords ? h('p.muted', `새 단어 ${res.newWords}개가 복습 목록에 들어갔어요.`) : null,
+      pet.note,
       h('div.actions',
         next ? h('a.btn.primary.big', { href: `#/lesson/${next.id}` }, `다음 레슨: ${next.title}`) : null,
         h('a.btn.big', { href: '#/learn' }, '학습 경로로'),

@@ -5,16 +5,26 @@ import { getState, currentStreak, dueWords, GOALS, studiedToday, isEmptyProgress
 import { nextLesson } from '../learn/path.js';
 import { entryClip } from '../sentence/clips.js';
 import { createViewerBlock } from '../viewer/widget.js';
-import { mascot } from '../mascot.js';
+import { mascot, petInfo } from '../mascot.js';
 
 // 수달이의 기분과 한마디 (오늘 공부했는지, 스트릭, 시간대에 따라)
 function heroMascot(streak, done, fresh) {
   const hr = new Date().getHours();
   if (done) return ['cheer', '오늘 학습 완료! 스트릭이 이어졌어요.'];
-  if (fresh) return ['wave', '안녕하세요! 저는 수달이예요. 같이 수어를 배워 봐요.'];
+  if (fresh) return ['wave', '안녕하세요! 저는 아기 수달 수달이예요. 같이 공부할수록 제가 자라요!'];
   if (streak > 0 && hr >= 18) return ['sad', `${streak}일 스트릭이 끊기기 전에 레슨 하나 어때요?`];
   if (hr < 6) return ['sleep', '늦은 시간이에요. 짧게 하나만 하고 자요.'];
   return ['wave', '레슨 하나만 끝내도 스트릭이 이어져요.'];
+}
+
+// 수달이 성장 단계 (누르면 내 정보의 "수달이 키우기"로)
+function petChip() {
+  const p = petInfo();
+  return h('a.pet-chip', { href: '#/profile' },
+    mascot('happy', { size: 24, stage: p.stage, pet: false }),
+    h('span', p.name),
+    p.next ? h('span.pet-chip-bar', h('i', { style: { width: p.pct + '%' } })) : null,
+    h('small', p.next ? `${p.next.name}까지 ${p.toNext} XP` : '최고 단계!'));
 }
 
 // 오늘의 수어: 날짜마다 바뀌는 쉬운 단어 하나 (사전 항목이 있는 난이도 1~2 단어 중에서)
@@ -64,6 +74,7 @@ export async function render(root, ctx) {
           h('div.hero-text',
             h('h1', streak > 0 ? `🔥 ${streak}일째 학습 중!` : '오늘 수어 한 단어 어때요?'),
             h('p', line),
+            petChip(),
           ),
           h('div.hero-mascot', mascot(mood, { size: 96, label: `수달이 (${line})` })),
         ),
