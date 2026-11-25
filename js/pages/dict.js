@@ -20,10 +20,10 @@ export async function render(root, ctx) {
   };
 
   const input = h('input.input', {
-    type: 'search', value: q0, placeholder: '단어 검색 (초성도 돼요: ㄱㅅ)',
+    type: 'search', value: q0, placeholder: '단어 또는 초성(ㄱㅅ) 검색',
     'aria-label': '단어 검색', autocomplete: 'off', enterkeyhint: 'search',
   });
-  const catChips = h('div.chips.scroll', { role: 'group', 'aria-label': '카테고리' });
+  const catChips = h('div.chips.scroll.cat-chips', { role: 'group', 'aria-label': '분류' });
   const lvChips = h('div.chips.scroll', { role: 'group', 'aria-label': '난이도' });
   const stChips = h('div.chips.scroll', { role: 'group', 'aria-label': '동작 상태' });
   const count = h('p.muted.small.result-count', { 'aria-live': 'polite' });
@@ -39,7 +39,23 @@ export async function render(root, ctx) {
       label, n === undefined ? null : h('span.chip-count', n));
   }
 
+  // 난이도·동작 필터는 "필터" 버튼 안에 접어 둔다 (켜져 있으면 처음부터 펼침)
+  const extra = h('div.filter-extra', { id: 'dict-filter-extra', hidden: !(level || status) });
+  const filterBtn = h('button.btn.small.filter-btn', {
+    type: 'button', 'aria-controls': 'dict-filter-extra',
+    onclick: () => { extra.hidden = !extra.hidden; renderFilters(); },
+  });
+
   function renderFilters() {
+    const active = (level ? 1 : 0) + (status ? 1 : 0);
+    filterBtn.replaceChildren(...[
+      h('span', { 'aria-hidden': 'true', html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>' }),
+      '필터',
+      active ? h('span.filter-count', String(active)) : null,
+    ].filter(Boolean));
+    filterBtn.setAttribute('aria-expanded', String(!extra.hidden));
+    filterBtn.setAttribute('aria-label', `난이도·동작 필터${active ? ` (${active}개 켜짐)` : ''}`);
+    filterBtn.classList.toggle('on', !extra.hidden || active > 0);
     clear(catChips).append(
       chip('전체', !category, () => { category = ''; update(); }),
       ...categoriesOf(list).map((c) => chip(c, category === c, () => { category = category === c ? '' : c; update(); })),
@@ -108,15 +124,18 @@ export async function render(root, ctx) {
     if (location.hash !== hash) history.replaceState(null, '', hash);
   }
 
+  extra.append(
+    h('div.filter-row', h('span.filter-label', { 'aria-hidden': 'true' }, '난이도'), lvChips),
+    h('div.filter-row', h('span.filter-label', { 'aria-hidden': 'true' }, '동작'), stChips),
+  );
   input.addEventListener('input', update);
   root.append(
     h('div.stack',
       h('div.page-head', h('h1', '수어 사전'), h('p', `한국수어 단어 ${list.length}개를 3D 동작으로 찾아보세요.`)),
       h('section.card.filters', { 'aria-label': '검색과 필터' },
-        h('div.search-box', input),
-        h('div.filter-row', h('span.filter-label', { 'aria-hidden': 'true' }, '분류'), catChips),
-        h('div.filter-row', h('span.filter-label', { 'aria-hidden': 'true' }, '난이도'), lvChips),
-        h('div.filter-row', h('span.filter-label', { 'aria-hidden': 'true' }, '동작'), stChips),
+        h('div.search-row', h('div.search-box', input), filterBtn),
+        catChips,
+        extra,
       ),
       count,
       results,

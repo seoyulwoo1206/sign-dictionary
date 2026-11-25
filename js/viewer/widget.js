@@ -26,7 +26,10 @@ export function createViewerBlock(ctx, {
   if (legend) {
     const lg = document.createElement('div');
     lg.className = 'viewer-legend';
-    lg.innerHTML = '<span>드래그해서 돌려보기 · Ctrl+휠로 확대</span><span>궤적 색: <i style="background:var(--right)"></i>오른손 <i style="background:var(--left)"></i>왼손</span>';
+    // 터치 화면이면 손가락 조작법을, 아니면 마우스 조작법을 알려 준다. 궤적 색은 궤적을 켰을 때만 보인다.
+    const touch = window.matchMedia('(pointer: coarse)').matches;
+    const how = touch ? '한 손가락으로 돌려보기 · 두 손가락으로 확대' : '드래그해서 돌려보기 · Ctrl+휠로 확대';
+    lg.innerHTML = `<span>${how}</span><span class="legend-trail">궤적 색: <i style="background:var(--right)"></i>오른손 <i style="background:var(--left)"></i>왼손</span>`;
     wrap.append(lg);
   }
 

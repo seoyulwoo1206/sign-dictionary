@@ -137,13 +137,15 @@ async function learnStep(body, step, ctx, answer) {
   const vb = createViewerBlock(scope, { keyboard: true, mirror: follow, speed: follow ? 1 : 0.5 });
   vb.viewer.setClip(await entryClip(entry));
   body.append(
-    h('div.lesson-layout',
-      h('div', vb.el),
-      h('div',
+    h('div.titled-layout.lesson',
+      h('div.tl-title',
         h('span.step-tag', follow ? '따라 하기 · 거울 모드' : '새 단어 · 보기'),
         h('h1.big-word', entry.word),
-        h('p', entry.meaning),
-        h('dl.info-list', { style: { marginTop: '12px' } },
+        h('p.tl-meaning', entry.meaning),
+      ),
+      h('div.tl-viewer', vb.el),
+      h('div.tl-body',
+        h('dl.info-list',
           h('dt', '동작'), h('dd', entry.description),
           h('dt', '손모양'), h('dd', entry.handshape || '—'),
           entry.nonManual ? [h('dt', '표정'), h('dd', entry.nonManual)] : null,
@@ -174,13 +176,15 @@ async function sentenceStep(body, step, ctx, answer) {
   });
   scope.onCleanup(off);
   body.append(
-    h('div.lesson-layout',
-      h('div', vb.el),
-      h('div',
+    h('div.titled-layout.lesson',
+      h('div.tl-title',
         h('span.step-tag', '문장 연습'),
         h('h1.big-word.quote', `“${step.sentence}”`),
         h('p.muted', '수어 단어 순서:'),
         h('div.gloss-cards', cards),
+      ),
+      h('div.tl-viewer', vb.el),
+      h('div.tl-body',
         ...(step.notes || []).map((n) => h('p.notice.info.small', n)),
         h('p.notice.small', { style: { marginTop: '10px' } }, '한국수어는 한국어와 문법이 다른 독립된 언어예요. 여기서는 단어를 이어 표현하는 연습만 해요.'),
       ),

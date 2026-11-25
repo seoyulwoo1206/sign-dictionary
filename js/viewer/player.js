@@ -119,7 +119,12 @@ export function createPlayerControls(viewer, { compact = false, keyboard = false
   row2.append(speedGroup);
 
   let viewBtns = [];
-  let mirrorBtn, handBtn, trailBtn;
+  let mirrorBtn, handBtn, trailBtn, moreBtn, panel;
+  function setOpen(open) {
+    panel.hidden = !open;
+    moreBtn.classList.toggle('on', open);
+    moreBtn.setAttribute('aria-expanded', String(open));
+  }
   if (showViewTools) {
     const viewGroup = document.createElement('div');
     viewGroup.className = 'seg';
@@ -141,7 +146,17 @@ export function createPlayerControls(viewer, { compact = false, keyboard = false
     tools.className = 'pc-tools';
     tools.append(mirrorBtn, handBtn, trailBtn);
     row2.append(viewGroup);
-    root.append(row1, row2, tools);
+    // 속도·시점·거울·손 확대·궤적은 "보기 설정" 안에 접어 둔다 (휴대폰에서 버튼이 화면을 덮지 않게)
+    panel = document.createElement('div');
+    panel.className = 'pc-more';
+    panel.id = 'pc-more-' + Math.random().toString(36).slice(2, 8);
+    panel.append(row2, tools);
+    moreBtn = btn(ICON.settings + '<span>보기 설정</span>', '보기 설정 (속도·시점·거울·손 확대·궤적)', 'toggle pc-text pc-more-btn');
+    moreBtn.setAttribute('aria-controls', panel.id);
+    moreBtn.addEventListener('click', () => { setOpen(panel.hidden); rememberOpen(!panel.hidden); });
+    row1.append(moreBtn);
+    setOpen(initialOpen());
+    root.append(row1, panel);
   } else {
     root.append(row1, row2);
   }
@@ -161,6 +176,10 @@ export function createPlayerControls(viewer, { compact = false, keyboard = false
     for (const { s, b } of speedBtns) b.classList.toggle('on', s === p.speed);
     for (const { key, b } of viewBtns) b.classList.toggle('on', key === viewer.view);
     if (mirrorBtn) {
+      // 기본값과 다른 설정이 켜져 있으면 "보기 설정" 버튼에 점을 찍어 알려 준다
+      const changed = p.speed !== 1 || viewer.view !== 'front' || viewer.mirror || viewer.handZoom || viewer.trailVisible;
+      moreBtn.classList.toggle('changed', changed);
+      root.parentElement?.classList.toggle('trail-on', viewer.trailVisible);
       mirrorBtn.classList.toggle('on', viewer.mirror);
       mirrorBtn.setAttribute('aria-pressed', String(viewer.mirror));
       handBtn.classList.toggle('on', viewer.handZoom);
@@ -195,7 +214,22 @@ export function createPlayerControls(viewer, { compact = false, keyboard = false
   };
 }
 
+// "보기 설정"을 펼쳐 둘지: 사용자가 정한 적 있으면 그대로, 아니면 넓은 화면에서만 펼친다
+const OPEN_KEY = 'signdict.viewerPanel';
+function initialOpen() {
+  try {
+    const v = localStorage.getItem(OPEN_KEY);
+    if (v === 'open') return true;
+    if (v === 'closed') return false;
+  } catch { /* 저장소를 못 쓰면 기본값 */ }
+  return window.matchMedia('(min-width: 900px)').matches;
+}
+function rememberOpen(open) {
+  try { localStorage.setItem(OPEN_KEY, open ? 'open' : 'closed'); } catch { /* 무시 */ }
+}
+
 export const ICON = {
+  settings: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>',
   play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>',
   pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z" fill="currentColor"/></svg>',
   restart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h2v14H6zM20 5.5v13L9.5 12z" fill="currentColor"/></svg>',
