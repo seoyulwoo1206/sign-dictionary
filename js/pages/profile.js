@@ -6,6 +6,7 @@ import {
 } from '../learn/progress.js';
 import { accountInfo, onAccountChange, signIn, signUp, signOut, sendPasswordReset, MIN_PASSWORD } from '../account.js';
 import { passwordFields } from './password-fields.js';
+import { reminderCard } from './reminder-card.js';
 import { dateKey, addDays } from '../learn/srs.js';
 import { refreshViewerAvatar } from '../viewer/viewer.js';
 import { getCustomAvatar, saveCustomAvatar, clearCustomAvatar } from '../viewer/avatar-store.js';
@@ -274,6 +275,8 @@ function build(root, c, redraw, mine) {
       h('div.stat', h('b', String(s.daily.reviews)), h('span', '오늘 복습')),
     ),
     h('section.card', h('h2', '최근 7일 XP'), week),
+
+    reminderCard(),
 
     h('section.card',
       h('h2', '설정'),

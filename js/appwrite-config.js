@@ -9,4 +9,7 @@ export const appwriteConfig = {
   projectId: '6b04e5c5003191ba7638',
   databaseId: 'signdict',
   tableId: 'progress',
+  // 공부 알림 (docs/appwrite-설정.md 의 "알림")
+  remindersTableId: 'reminders',
+  reminderFunctionId: 'reminders',
 };

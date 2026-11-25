@@ -2,6 +2,7 @@
 import { clear, errorView, loadingView, applyTheme } from './ui.js';
 import { getState, onChange, currentStreak, storageOK } from './learn/progress.js';
 import { initAccount, onAccountChange, accountInfo } from './account.js';
+import { registerServiceWorker } from './reminders.js';
 
 const routes = [
   { pattern: /^\/?$/, nav: 'home', load: () => import('./pages/home.js') },
@@ -128,3 +129,4 @@ window.addEventListener('signdict:synced', () => {
 window.addEventListener('hashchange', route);
 route();
 initAccount();
+registerServiceWorker();

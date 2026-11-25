@@ -82,8 +82,14 @@ async function load() {
   const sdk = await import(SDK);
   // setLocale('ko'): Appwrite 가 보내는 메일(비밀번호 재설정 등)을 한국어로
   const client = new sdk.Client().setEndpoint(CFG.endpoint).setProject(CFG.projectId).setLocale('ko');
-  aw = { sdk, account: new sdk.Account(client), tables: new sdk.TablesDB(client) };
+  aw = { sdk, account: new sdk.Account(client), tables: new sdk.TablesDB(client), functions: new sdk.Functions(client) };
   return aw;
+}
+
+// 다른 기능(공부 알림)이 같은 Appwrite 연결과 로그인 사용자를 쓰도록
+export async function appwrite() {
+  await load();
+  return { ...aw, user, config: CFG };
 }
 
 const rowRef = () => ({ databaseId: CFG.databaseId, tableId: CFG.tableId, rowId: user.$id });

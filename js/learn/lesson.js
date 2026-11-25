@@ -8,6 +8,7 @@ import { isUnlocked, lessonAfter } from './path.js';
 import { gloss } from '../sentence/glosser.js';
 import { getGlossIndex, sentenceClip, tokenLabel, TYPE_LABELS, entryClip, entrySignPaths } from '../sentence/clips.js';
 import { jamoSignPath } from '../sentence/fingerspell.js';
+import { mascot } from '../mascot.js';
 
 const WORD_TYPES = ['sign2word', 'word2sign', 'type'];
 
@@ -16,7 +17,7 @@ export async function render(root, ctx) {
   const lesson = c.lessonById.get(ctx.params.id);
   if (!lesson) { root.append(errorView('레슨을 찾을 수 없어요.')); return; }
   if (!isUnlocked(c, lesson)) {
-    root.append(h('div.empty', h('span.state-ico', { 'aria-hidden': 'true' }, '🔒'), h('strong', '아직 잠겨 있어요'), h('p.muted', '앞 레슨을 먼저 끝내 주세요.'), h('a.btn.primary', { href: '#/learn' }, '학습 경로로')));
+    root.append(h('div.empty', mascot('think', { size: 110 }), h('strong', '아직 잠겨 있어요'), h('p.muted', '앞 레슨을 먼저 끝내 주세요.'), h('a.btn.primary', { href: '#/learn' }, '학습 경로로')));
     return;
   }
 
@@ -115,10 +116,10 @@ export async function render(root, ctx) {
   const next = lessonAfter(c, lesson.id);
   clear(body).append(
     h('div.result.card.pop',
-      h('div.emoji', perfect ? '🏆' : '🎉'),
+      h('div.result-mascot', mascot(perfect ? 'cheer' : 'happy', { size: 140 })),
       h('h1', '레슨 완료!'),
       h('p.xp-earned', `+${res.xp} XP`),
-      perfect ? h('p', '실수 없이 끝냈어요! 보너스 +5 XP') : h('p.muted', `틀린 문제 ${mistakes}개 — 복습에서 다시 만나요.`),
+      perfect ? h('p', '실수 없이 끝냈어요! 수달이가 신났어요. 보너스 +5 XP') : h('p.muted', `틀린 문제 ${mistakes}개 — 복습에서 다시 만나요.`),
       res.streakUp ? h('p', `🔥 스트릭 ${currentStreak()}일!`) : null,
       res.newWords ? h('p.muted', `새 단어 ${res.newWords}개가 복습 목록에 들어갔어요.`) : null,
       h('div.actions',

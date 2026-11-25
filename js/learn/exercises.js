@@ -5,6 +5,7 @@
 //  orderSign : 문장 동작 보고 단어 카드 순서 맞추기
 //  orderKo   : 한국어 문장 보고 수어 단어 카드 순서대로 배열하기
 import { h, clear, shuffle, playSound } from '../ui.js';
+import { mascot } from '../mascot.js';
 import { createViewerBlock } from '../viewer/widget.js';
 import { sentenceClip, tokenLabel, entryClip, hasOwnSign } from '../sentence/clips.js';
 
@@ -55,7 +56,9 @@ export function answerBar() {
     // 결과 보여주고 '계속' 누를 때까지 대기
     showResult(correct, title, detail) {
       el.className = 'feedback ' + (correct ? 'good' : 'bad');
-      clear(msg).append(h('strong', title), detail ? h('p', detail) : null);
+      clear(msg).append(h('div.fb-row',
+        mascot(correct ? 'happy' : 'sad', { size: 54 }),
+        h('div', h('strong', title), detail ? h('p', detail) : null)));
       msg.setAttribute('role', 'alert');
       btn.disabled = false;
       btn.textContent = '계속';

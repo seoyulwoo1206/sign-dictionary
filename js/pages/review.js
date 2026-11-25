@@ -5,6 +5,7 @@ import { runExercise, answerBar, pickOptions } from '../learn/exercises.js';
 import { dueWords, recordReview, completeReviewSession, currentStreak, getState } from '../learn/progress.js';
 import { INTERVALS } from '../learn/srs.js';
 import { entrySignPaths, hasOwnSign } from '../sentence/clips.js';
+import { mascot } from '../mascot.js';
 
 const MAX = 15;
 const TYPES = ['sign2word', 'type', 'word2sign'];
@@ -16,7 +17,7 @@ export async function render(root, ctx) {
   if (!due.length) {
     const learned = Object.keys(getState().words).length;
     root.append(h('div.result.card',
-      h('div.emoji', '✅'),
+      h('div.result-mascot', mascot('happy', { size: 120 })),
       h('h1', '오늘 복습할 단어가 없어요'),
       h('p.muted', learned ? '복습 날짜가 된 단어가 생기면 여기에 나와요.' : '레슨을 끝내거나 사전에서 "학습 목록에 추가"를 누르면 복습할 단어가 생겨요.'),
       h('div.actions',
@@ -64,7 +65,7 @@ export async function render(root, ctx) {
   answer.el.remove();
   const s = getState();
   clear(body).append(h('div.result.card.pop',
-    h('div.emoji', '🔁'),
+    h('div.result-mascot', mascot(correctFirst === due.length ? 'cheer' : 'happy', { size: 140 })),
     h('h1', '복습 완료!'),
     h('p.xp-earned', `${correctFirst}/${due.length} 정답`),
     res.streakUp ? h('p', `🔥 스트릭 ${currentStreak()}일!`) : null,

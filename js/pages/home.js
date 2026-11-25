@@ -5,6 +5,17 @@ import { getState, currentStreak, dueWords, GOALS, studiedToday, isEmptyProgress
 import { nextLesson } from '../learn/path.js';
 import { entryClip } from '../sentence/clips.js';
 import { createViewerBlock } from '../viewer/widget.js';
+import { mascot } from '../mascot.js';
+
+// 수달이의 기분과 한마디 (오늘 공부했는지, 스트릭, 시간대에 따라)
+function heroMascot(streak, done, fresh) {
+  const hr = new Date().getHours();
+  if (done) return ['cheer', '오늘 학습 완료! 스트릭이 이어졌어요.'];
+  if (fresh) return ['wave', '안녕하세요! 저는 수달이예요. 같이 수어를 배워 봐요.'];
+  if (streak > 0 && hr >= 18) return ['sad', `${streak}일 스트릭이 끊기기 전에 레슨 하나 어때요?`];
+  if (hr < 6) return ['sleep', '늦은 시간이에요. 짧게 하나만 하고 자요.'];
+  return ['wave', '레슨 하나만 끝내도 스트릭이 이어져요.'];
+}
 
 // 오늘의 수어: 날짜마다 바뀌는 쉬운 단어 하나 (사전 항목이 있는 난이도 1~2 단어 중에서)
 function wordOfDay(list) {
@@ -40,6 +51,7 @@ export async function render(root, ctx) {
   const next = nextLesson(curriculum);
   const learned = Object.keys(s.words).length;
   const streak = currentStreak();
+  const [mood, line] = heroMascot(streak, studiedToday(), fresh);
 
   const newPct = Math.min(100, (s.daily.newWords / goal.newWords) * 100);
   const reviewTarget = Math.max(due.length + s.daily.reviews, 1);
@@ -48,8 +60,13 @@ export async function render(root, ctx) {
   root.append(
     h('div.stack',
       h('section.card.hero',
-        h('h1', streak > 0 ? `🔥 ${streak}일째 학습 중!` : '오늘 수어 한 단어 어때요?'),
-        h('p', studiedToday() ? '오늘 학습 완료! 스트릭이 이어졌어요.' : '레슨 하나만 끝내도 스트릭이 이어져요.'),
+        h('div.hero-top',
+          h('div.hero-text',
+            h('h1', streak > 0 ? `🔥 ${streak}일째 학습 중!` : '오늘 수어 한 단어 어때요?'),
+            h('p', line),
+          ),
+          h('div.hero-mascot', mascot(mood, { size: 96, label: `수달이 (${line})` })),
+        ),
         next
           ? h('a.btn.big', { href: `#/lesson/${next.id}`, 'aria-label': `이어서 학습: ${next.unit.title} – ${next.title}` },
             h('span.cta-ico', { 'aria-hidden': 'true', html: '<svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>' }),
