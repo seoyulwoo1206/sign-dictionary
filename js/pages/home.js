@@ -1,12 +1,40 @@
 // 홈: 오늘의 학습, 스트릭, 바로가기
-import { h } from '../ui.js';
-import { loadCurriculum } from '../data.js';
-import { getState, currentStreak, dueWords, GOALS, studiedToday } from '../learn/progress.js';
+import { h, wordHref } from '../ui.js';
+import { loadCurriculum, loadWords } from '../data.js';
+import { getState, currentStreak, dueWords, GOALS, studiedToday, isEmptyProgress } from '../learn/progress.js';
 import { nextLesson } from '../learn/path.js';
+import { entryClip } from '../sentence/clips.js';
+import { createViewerBlock } from '../viewer/widget.js';
 
-export async function render(root) {
-  const curriculum = await loadCurriculum();
+// 오늘의 수어: 날짜마다 바뀌는 쉬운 단어 하나 (사전 항목이 있는 난이도 1~2 단어 중에서)
+function wordOfDay(list) {
+  const pool = list.filter((w) => w.sign && w.ref && (w.level || 1) <= 2);
+  const from = pool.length ? pool : list.filter((w) => w.sign);
+  const d = new Date();
+  const day = Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
+  return from[(day * 7919) % from.length];
+}
+
+function todaySignCard(ctx, entry) {
+  const vb = createViewerBlock(ctx, { controls: false, small: true, interactive: false, legend: false, speed: 0.8 });
+  entryClip(entry).then((clip) => { if (ctx.isCurrent()) vb.viewer.setClip(clip); }).catch(() => {});
+  return h('section.card.today-sign', { 'aria-label': '오늘의 수어' },
+    h('div.today-viewer', vb.el),
+    h('div.today-text',
+      h('span.step-tag', '오늘의 수어'),
+      h('h2.today-word', entry.word),
+      h('p.muted', entry.meaning),
+      h('a.btn.small.primary', { href: wordHref(entry.word) }, '자세히 보기 →'),
+    ),
+  );
+}
+
+export async function render(root, ctx) {
+  const [curriculum, { list }] = await Promise.all([loadCurriculum(), loadWords()]);
   const s = getState();
+  // 처음 온 사람: 빈 목표·통계(0, 0/5…) 대신 오늘의 수어를 크게 보여 준다
+  const fresh = isEmptyProgress(s);
+  const today = wordOfDay(list);
   const goal = GOALS[s.goal] || GOALS.normal;
   const due = dueWords();
   const next = nextLesson(curriculum);
@@ -29,7 +57,9 @@ export async function render(root) {
           : h('a.btn.big', { href: '#/learn', style: { justifyContent: 'center' } }, '🎉 모든 레슨 완료! 다시 하기'),
       ),
 
-      h('section.card',
+      today ? todaySignCard(ctx, today) : null,
+
+      fresh ? null : h('section.card',
         h('h2', '오늘의 목표'),
         h('div.stack',
           h('div.goal-row',
@@ -48,7 +78,7 @@ export async function render(root) {
           : h('p.muted.small', { style: { marginTop: '14px', marginBottom: 0 } }, learned ? '오늘 복습할 단어가 없어요. 잘하고 있어요!' : '레슨을 끝내면 복습할 단어가 생겨요.'),
       ),
 
-      h('section.stats', { 'aria-label': '학습 통계' },
+      fresh ? null : h('section.stats', { 'aria-label': '학습 통계' },
         h('div.stat', h('b', `🔥 ${streak}`), h('span', '연속 학습일')),
         h('div.stat', h('b', `⭐ ${s.xp}`), h('span', '총 XP')),
         h('div.stat', h('b', `📚 ${learned}`), h('span', '배운 단어')),

@@ -94,7 +94,7 @@ function loginForm(err) {
       signup ? link('이미 계정이 있어요', 'login')
         : forgot ? link('로그인으로 돌아가기', 'login')
           : link('처음이에요 (가입하기)', 'signup')),
-    mode === 'login' ? h('div.row', link('비밀번호를 잊었어요', 'forgot')) : null,
+    mode === 'login' ? h('button.link-btn', { type: 'button', onclick: () => switchMode(form, 'forgot') }, '비밀번호를 잊으셨나요?') : null,
   );
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
